@@ -1,0 +1,19 @@
+{
+  "name": "ai-recommend",
+  "version": "1.0.0",
+  "description": "AI-powered food recommendation Lambda function",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20.x"
+  },
+  "scripts": {
+    "test": "jest",
+    "deploy": "bash deploy.sh"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.15.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

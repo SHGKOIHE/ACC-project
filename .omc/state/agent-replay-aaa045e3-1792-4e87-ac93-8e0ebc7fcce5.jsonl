@@ -1,0 +1,7 @@
+{"t":0,"agent":"a96eaf3","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"system","event":"keyword_detected","keyword":"autopilot"}
+{"t":0,"agent":"system","event":"mode_change","mode_from":"none","mode_to":"autopilot"}
+{"t":0,"agent":"a3587b6","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a527cd3","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a9629c2","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a36bf8e","agent_type":"unknown","event":"agent_stop","success":true}

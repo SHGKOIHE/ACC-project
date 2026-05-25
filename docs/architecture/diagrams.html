@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture - 배달비 절약 음식 공동구매 앱</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 240px;
+            height: 100vh;
+            background: #1e293b;
+            padding: 24px 16px;
+            overflow-y: auto;
+            border-right: 1px solid #334155;
+            z-index: 100;
+        }
+        nav h2 {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        nav a {
+            display: block;
+            color: #cbd5e1;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 4px;
+            transition: background 0.2s;
+        }
+        nav a:hover, nav a.active {
+            background: #334155;
+            color: #f1f5f9;
+        }
+        main {
+            margin-left: 240px;
+            padding: 40px;
+            max-width: 1200px;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #f1f5f9;
+        }
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+        section {
+            margin-bottom: 60px;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid #334155;
+        }
+        section h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #f1f5f9;
+        }
+        section p.desc {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #334155;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        @media (max-width: 768px) {
+            nav { display: none; }
+            main { margin-left: 0; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <h2>Diagrams</h2>
+    <a href="#system">1. 전체 시스템 구성도</a>
+    <a href="#api-flow">2. API 통신 흐름</a>
+    <a href="#websocket">3. WebSocket / FCM</a>
+    <a href="#ai-pipeline">4. AI 추천 파이프라인</a>
+    <a href="#erd">5. ERD</a>
+    <a href="#room-state">6. 방 상태 전이</a>
+    <a href="#deployment">7. 배포 구성</a>
+</nav>
+
+<main>
+    <h1>System Architecture</h1>
+    <p class="subtitle">배달비 절약 음식 공동구매 앱 | Spring Boot 3.3 + React Native + AWS | 2026-05-24</p>
+
+    <!-- 1. 전체 시스템 구성도 -->
+    <section id="system">
+        <h2>1. 전체 시스템 구성도</h2>
+        <p class="desc">미니PC(온프레미스) + AWS 하이브리드 아키텍처. 클라이언트 -> Cloudflare Tunnel -> 미니PC, 이미지는 CloudFront -> S3.</p>
+        <pre class="mermaid">
+graph TB
+    subgraph CLIENT["Mobile Client"]
+        RN["React Native<br/>(Expo)"]
+    end
+
+    subgraph TUNNEL["Cloudflare Tunnel"]
+        CF_TUNNEL["Cloudflare Tunnel<br/>SSL + 고정 도메인"]
+    end
+
+    subgraph AWS["AWS Cloud"]
+        CF["CloudFront<br/>(CDN)"]
+        S3["S3<br/>(이미지 저장)"]
+        APIGW["API Gateway"]
+        LAMBDA["Lambda<br/>(Node.js)"]
+        CW["CloudWatch<br/>(모니터링)"]
+    end
+
+    subgraph MINIPC["미니PC (온프레미스 / Docker Compose)"]
+        SB["Spring Boot 3.3<br/>(Java 17)"]
+        PG["PostgreSQL 16"]
+        REDIS["Redis 7"]
+    end
+
+    subgraph EXTERNAL["External Services"]
+        FCM["Firebase FCM"]
+        KAKAO["Kakao Map API"]
+        GEMINI["Gemini Flash API"]
+    end
+
+    RN -- "HTTPS (API + WebSocket)" --> CF_TUNNEL
+    RN -- "HTTPS (이미지)" --> CF
+    CF_TUNNEL -- "HTTP localhost" --> SB
+    CF --> S3
+    SB <--> PG
+    SB <--> REDIS
+    SB -- "AI 추천 요청" --> APIGW
+    APIGW --> LAMBDA
+    LAMBDA -- "설명 생성" --> GEMINI
+    SB -- "푸시 알림" --> FCM
+    SB -- "식당 검색" --> KAKAO
+    CW -. "헬스체크" .-> SB
+    FCM -- "푸시" --> RN
+
+    style CLIENT fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style MINIPC fill:#1a3324,stroke:#22c55e,color:#e2e8f0
+    style AWS fill:#3b1f2b,stroke:#f59e0b,color:#e2e8f0
+    style EXTERNAL fill:#2d2235,stroke:#a855f7,color:#e2e8f0
+    style TUNNEL fill:#1e293b,stroke:#64748b,color:#e2e8f0
+        </pre>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background:#3b82f6"></div>클라이언트</div>
+            <div class="legend-item"><div class="legend-color" style="background:#22c55e"></div>미니PC (온프레미스)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#f59e0b"></div>AWS</div>
+            <div class="legend-item"><div class="legend-color" style="background:#a855f7"></div>외부 서비스</div>
+        </div>
+    </section>
+
+    <!-- 2. API 통신 흐름 -->
+    <section id="api-flow">
+        <h2>2. API 통신 흐름</h2>
+        <p class="desc">클라이언트 요청이 Spring Boot에 도달하기까지의 흐름과 내부 레이어 구조.</p>
+        <pre class="mermaid">
+graph LR
+    subgraph CLIENT["Client"]
+        APP["React Native"]
+    end
+
+    subgraph EDGE["Edge"]
+        TUNNEL["Cloudflare<br/>Tunnel"]
+    end
+
+    subgraph SPRING["Spring Boot"]
+        FILTER["Security<br/>Filter"]
+        AUTH_C["Auth<br/>Controller"]
+        ROOM_C["Room<br/>Controller"]
+        ORDER_C["Order<br/>Controller"]
+        AUTH_S["Auth<br/>Service"]
+        ROOM_S["Room<br/>Service"]
+        ORDER_S["Order<br/>Service"]
+    end
+
+    subgraph DATA["Data Layer"]
+        PG["PostgreSQL"]
+        REDIS["Redis"]
+    end
+
+    APP -- "HTTPS" --> TUNNEL
+    TUNNEL -- "HTTP" --> FILTER
+    FILTER --> AUTH_C
+    FILTER --> ROOM_C
+    FILTER --> ORDER_C
+    AUTH_C --> AUTH_S
+    ROOM_C --> ROOM_S
+    ORDER_C --> ORDER_S
+    AUTH_S --> PG
+    AUTH_S --> REDIS
+    ROOM_S --> PG
+    ROOM_S --> REDIS
+    ORDER_S --> PG
+
+    style CLIENT fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style EDGE fill:#1e293b,stroke:#64748b,color:#e2e8f0
+    style SPRING fill:#1a3324,stroke:#22c55e,color:#e2e8f0
+    style DATA fill:#2d2235,stroke:#a855f7,color:#e2e8f0
+        </pre>
+    </section>
+
+    <!-- 3. WebSocket / FCM -->
+    <section id="websocket">
+        <h2>3. WebSocket / FCM 연동 구조</h2>
+        <p class="desc">STOMP 기반 실시간 채팅과 FCM 푸시 알림 발송 흐름.</p>
+        <pre class="mermaid">
+sequenceDiagram
+    participant App as React Native
+    participant Tunnel as Cloudflare Tunnel
+    participant WS as Spring Boot<br/>(STOMP)
+    participant Redis as Redis<br/>(Pub/Sub)
+    participant FCM as Firebase FCM
+
+    Note over App, WS: WebSocket 연결
+    App->>Tunnel: WS 연결 요청
+    Tunnel->>WS: STOMP CONNECT
+
+    Note over App, FCM: 채팅 메시지 전송
+    App->>WS: /app/room/{roomId}/chat
+    WS->>Redis: Publish (채팅 이벤트)
+    WS-->>App: /topic/room/{roomId}/chat (실시간)
+    WS->>FCM: 백그라운드 사용자에게 푸시
+    FCM-->>App: 푸시 알림 수신
+
+    Note over App, FCM: 방 참여 알림
+    App->>WS: POST /api/rooms/{id}/join
+    WS->>Redis: INCR room:{id}:count
+    WS-->>App: /topic/room/{roomId}/members
+    WS->>FCM: "새 참여자 입장" 알림
+    FCM-->>App: 푸시 알림 수신
+        </pre>
+    </section>
+
+    <!-- 4. AI 추천 파이프라인 -->
+    <section id="ai-pipeline">
+        <h2>4. AI 추천 파이프라인</h2>
+        <p class="desc">규칙 엔진 필터링 -> Lambda(Gemini Flash) 설명 생성의 2단계 파이프라인.</p>
+        <pre class="mermaid">
+sequenceDiagram
+    participant App as React Native
+    participant SB as Spring Boot
+    participant Rule as Rule Engine<br/>(Spring Boot 내부)
+    participant APIGW as API Gateway
+    participant Lambda as Lambda
+    participant Gemini as Gemini Flash
+
+    App->>SB: POST /api/ai/recommend<br/>{categories, maxPrice, mood}
+    SB->>Rule: 필터링 요청
+
+    Note over Rule: 1단계: 규칙 기반 필터 + 랭킹<br/>카테고리 매칭<br/>거리 필터 (Haversine)<br/>가격대 필터<br/>참여율/마감시간 랭킹
+
+    Rule-->>SB: Top 3~5 식당
+
+    SB->>APIGW: POST /recommend<br/>{restaurants, user_preferences}
+    APIGW->>Lambda: Invoke
+    Lambda->>Gemini: 설명 생성 요청<br/>"왜 이 식당을 추천하는지 2줄"
+
+    Note over Gemini: 2단계: 자연어 설명 생성
+
+    Gemini-->>Lambda: 설명 텍스트
+    Lambda-->>APIGW: {recommendations}
+    APIGW-->>SB: 응답
+    SB-->>App: 식당 목록 + AI 설명
+        </pre>
+    </section>
+
+    <!-- 5. ERD -->
+    <section id="erd">
+        <h2>5. ERD (Entity Relationship Diagram)</h2>
+        <p class="desc">6개 핵심 테이블 관계도. members, rooms, room_participants, order_items, settlements, member_settlements.</p>
+        <pre class="mermaid">
+erDiagram
+    members {
+        bigserial id PK
+        varchar nickname UK
+        varchar device_token UK
+        timestamp created_at
+    }
+
+    rooms {
+        bigserial id PK
+        bigint host_id FK
+        varchar title
+        varchar meeting_type
+        varchar restaurant_name
+        varchar restaurant_address
+        double latitude
+        double longitude
+        integer delivery_fee
+        integer max_participants
+        varchar status
+        timestamp closed_at
+        varchar meeting_address
+        varchar account_number "AES-256 암호화"
+        varchar account_holder
+        varchar bank_name
+        timestamp created_at
+        timestamp updated_at
+        integer version "낙관적 락"
+    }
+
+    room_participants {
+        bigserial id PK
+        bigint room_id FK
+        bigint member_id FK
+        timestamp joined_at
+    }
+
+    order_items {
+        bigserial id PK
+        bigint room_id FK
+        bigint member_id FK
+        varchar menu_name
+        integer quantity
+        integer price
+        timestamp created_at
+    }
+
+    settlements {
+        bigserial id PK
+        bigint room_id FK "UNIQUE"
+        integer total_menu_amount
+        integer total_delivery_fee
+        integer participant_count
+        integer fee_per_person "올림 계산"
+        integer host_surplus
+        timestamp created_at
+    }
+
+    member_settlements {
+        bigserial id PK
+        bigint settlement_id FK
+        bigint member_id FK
+        integer menu_amount
+        integer delivery_fee_share
+        integer total_amount
+        boolean is_host
+    }
+
+    members ||--o{ rooms : "creates (host)"
+    members ||--o{ room_participants : "joins"
+    members ||--o{ order_items : "orders"
+    members ||--o{ member_settlements : "settles"
+    rooms ||--o{ room_participants : "has"
+    rooms ||--o{ order_items : "contains"
+    rooms ||--|| settlements : "produces"
+    settlements ||--o{ member_settlements : "details"
+        </pre>
+    </section>
+
+    <!-- 6. 방 상태 전이 -->
+    <section id="room-state">
+        <h2>6. 방 상태 전이 다이어그램</h2>
+        <p class="desc">rooms.status 필드의 상태 머신. 5개 상태, 취소는 OPEN/CLOSED/CONFIRMED 모두에서 가능.</p>
+        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> OPEN: 방 생성
+
+    OPEN --> CLOSED: 방장 수동 마감<br/>시간 자동 마감
+    OPEN --> CANCELLED: 방장 취소<br/>참여자 0명
+
+    CLOSED --> CONFIRMED: 방장 주문 확정
+    CLOSED --> CANCELLED: 방장 취소
+
+    CONFIRMED --> COMPLETED: 방장 완료 처리
+    CONFIRMED --> CANCELLED: 방장 취소<br/>(식당 거부 등)
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+        </pre>
+    </section>
+
+    <!-- 7. 배포 구성 -->
+    <section id="deployment">
+        <h2>7. 배포 구성도</h2>
+        <p class="desc">미니PC Docker Compose 내부 서비스와 AWS 서비스 배치.</p>
+        <pre class="mermaid">
+graph TB
+    subgraph MINIPC["미니PC (Ryzen 7 PRO / 24GB RAM)"]
+        subgraph DOCKER["Docker Compose"]
+            APP["Spring Boot 3.3<br/>4GB RAM / 4 CPU<br/>:8080"]
+            PG["PostgreSQL 16<br/>4GB RAM / 2 CPU<br/>:5432"]
+            RD["Redis 7<br/>1GB RAM / 1 CPU<br/>:6379"]
+            TN["Cloudflare Tunnel<br/>256MB RAM"]
+        end
+        CRON["Cron<br/>pg_dump -> S3 백업"]
+    end
+
+    subgraph AWS["AWS (4 Services)"]
+        CF["CloudFront<br/>(이미지 CDN)"]
+        S3["S3<br/>(이미지 + DB 백업)"]
+        APIGW["API Gateway<br/>(Lambda 진입점)"]
+        LAMBDA["Lambda<br/>(AI 설명 생성)"]
+    end
+
+    TN -- "localhost:8080" --> APP
+    APP <--> PG
+    APP <--> RD
+    APP -- "AI 요청" --> APIGW
+    APIGW --> LAMBDA
+    CF --> S3
+    CRON -- "pg_dump + gzip" --> S3
+
+    style MINIPC fill:#1a3324,stroke:#22c55e,color:#e2e8f0
+    style DOCKER fill:#1a3324,stroke:#16a34a,color:#e2e8f0
+    style AWS fill:#3b1f2b,stroke:#f59e0b,color:#e2e8f0
+        </pre>
+    </section>
+
+</main>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        themeVariables: {
+            primaryColor: '#334155',
+            primaryTextColor: '#e2e8f0',
+            primaryBorderColor: '#64748b',
+            lineColor: '#64748b',
+            secondaryColor: '#1e293b',
+            tertiaryColor: '#0f172a',
+            fontSize: '14px'
+        },
+        flowchart: { curve: 'basis', padding: 20 },
+        sequence: { mirrorActors: false, messageAlign: 'center' }
+    });
+
+    // Navigation highlight
+    const links = document.querySelectorAll('nav a');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                links.forEach(l => l.classList.remove('active'));
+                const active = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+                if (active) active.classList.add('active');
+            }
+        });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('section').forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

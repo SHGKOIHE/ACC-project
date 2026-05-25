@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"ls -la /home/sohegi/projects/ACC_1/.git 2>&1 && git -C /home/sohegi/projects/ACC_1 log --oneline -3 2>&1\",\"description\":\"Check if ACC_1 has its own .git directory\"}",
+  "error": "Exit code 2\nls: '/home/sohegi/projects/ACC_1/.git'에 접근할 수 없음: 그런 파일이나 디렉터리가 없습니다",
+  "timestamp": "2026-05-25T07:14:59.067Z",
+  "retry_count": 2
+}

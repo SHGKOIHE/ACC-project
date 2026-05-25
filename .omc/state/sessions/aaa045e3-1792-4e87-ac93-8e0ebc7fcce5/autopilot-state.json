@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "started_at": "2026-05-25T06:47:42.802Z",
+  "original_prompt": "auto-pilot 시에 자동으로 team 얼마나 조절하지?",
+  "session_id": "aaa045e3-1792-4e87-ac93-8e0ebc7fcce5",
+  "project_path": "/home/sohegi/projects/ACC_1",
+  "reinforcement_count": 3,
+  "awaiting_confirmation": true,
+  "awaiting_confirmation_set_at": "2026-05-25T06:47:42.802Z",
+  "last_checked_at": "2026-05-25T07:12:10.176Z"
+}
