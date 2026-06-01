@@ -22,7 +22,7 @@ public class ChatHistoryController {
 
     @GetMapping("/{roomId}/chats")
     public ApiResponse<List<ChatMessageResponse>> getHistory(
-            @PathVariable Long roomId,
+            @PathVariable String roomId,
             @AuthenticationPrincipal MemberPrincipal principal) {
         return ApiResponse.ok(chatService.getHistory(roomId, principal.memberId()));
     }

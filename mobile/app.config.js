@@ -9,7 +9,7 @@ module.exports = {
     name: '같이먹자',
     slug: 'foodgroup',
     version: '1.0.0',
-    orientation: 'portrait',
+    orientation: 'default',
     userInterfaceStyle: 'light',
     assetBundlePatterns: ['**/*'],
     ios: {
@@ -31,9 +31,20 @@ module.exports = {
         'expo-secure-store',
         { faceIDPermission: 'Allow $(PRODUCT_NAME) to use Face ID.' },
       ],
+      [
+        'expo-notifications',
+        {
+          icon: './assets/adaptive-icon.png',
+          color: '#FF6B35',
+        },
+      ],
+      [
+        'expo-location',
+        { locationAlwaysAndWhenInUsePermission: '주변 음식점을 찾기 위해 위치 정보가 필요합니다.' },
+      ],
     ],
     extra: {
-      apiBaseUrl: process.env.API_BASE_URL,
+      apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
       eas: { projectId: process.env.EAS_PROJECT_ID },
     },
   },

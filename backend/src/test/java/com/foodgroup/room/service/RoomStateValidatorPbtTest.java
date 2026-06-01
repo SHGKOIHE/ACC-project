@@ -40,9 +40,19 @@ class RoomStateValidatorPbtTest {
     }
 
     @Property
-    void PBT07_CONFIRMED는_COMPLETED_또는_CANCELLED만_허용(@ForAll RoomStatus to) {
+    void PBT07_CONFIRMED는_DELIVERING_또는_CANCELLED만_허용(@ForAll RoomStatus to) {
         boolean result = validator.isValidTransition(RoomStatus.CONFIRMED, to);
-        if (to == RoomStatus.COMPLETED || to == RoomStatus.CANCELLED) {
+        if (to == RoomStatus.DELIVERING || to == RoomStatus.CANCELLED) {
+            assertThat(result).isTrue();
+        } else {
+            assertThat(result).isFalse();
+        }
+    }
+
+    @Property
+    void PBT07_DELIVERING는_COMPLETED만_허용(@ForAll RoomStatus to) {
+        boolean result = validator.isValidTransition(RoomStatus.DELIVERING, to);
+        if (to == RoomStatus.COMPLETED) {
             assertThat(result).isTrue();
         } else {
             assertThat(result).isFalse();

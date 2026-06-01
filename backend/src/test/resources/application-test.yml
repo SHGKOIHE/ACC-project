@@ -1,0 +1,24 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+encryption:
+  key: dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTEyMzQ=
+
+fcm:
+  enabled: false
+
+ai:
+  lambda:
+    function-name: test-fn
+    internal-key: test-internal-key
+
+aws:
+  region: ap-northeast-2
+  dynamodb:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.foodgroup: INFO
+    org.springframework.security: WARN

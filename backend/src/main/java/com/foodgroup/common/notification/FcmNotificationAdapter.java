@@ -1,7 +1,7 @@
 package com.foodgroup.common.notification;
 
-import com.foodgroup.auth.repository.MemberRepository;
-import com.foodgroup.room.repository.RoomParticipantRepository;
+import com.foodgroup.auth.repository.MemberPort;
+import com.foodgroup.room.repository.RoomParticipantPort;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
@@ -12,8 +12,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Slf4j
 @Service
 @Primary
@@ -22,21 +20,20 @@ import java.util.List;
 public class FcmNotificationAdapter implements NotificationPort {
 
     private final FirebaseMessaging firebaseMessaging;
-    private final MemberRepository memberRepository;
-    private final RoomParticipantRepository roomParticipantRepository;
+    private final MemberPort memberPort;
+    private final RoomParticipantPort roomParticipantPort;
 
     @Async
     @Override
-    public void sendToRoom(Long roomId, String title, String body) {
-        List<Long> memberIds = roomParticipantRepository.findByRoomId(roomId).stream()
+    public void sendToRoom(String roomId, String title, String body) {
+        roomParticipantPort.findByRoomId(roomId).stream()
                 .map(p -> p.getMemberId())
-                .toList();
-        memberIds.forEach(memberId -> sendToMember(memberId, title, body));
+                .forEach(memberId -> sendToMember(memberId, title, body));
     }
 
     @Override
-    public void sendToMember(Long memberId, String title, String body) {
-        memberRepository.findById(memberId).ifPresent(member -> {
+    public void sendToMember(String memberId, String title, String body) {
+        memberPort.findById(memberId).ifPresent(member -> {
             if (member.getFcmToken() == null) return;
             try {
                 Message message = Message.builder()

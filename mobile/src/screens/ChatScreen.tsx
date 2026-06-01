@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { Client } from '@stomp/stompjs';
@@ -13,9 +14,9 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 type RouteParams = RouteProp<RootStackParamList, 'Chat'>;
 
 interface ChatMessage {
-  id: number;
-  roomId: number;
-  memberId?: number;
+  id: string;
+  roomId: string;
+  memberId?: string;
   nickname?: string;
   type: 'TALK' | 'ENTER' | 'LEAVE' | 'NOTICE';
   content: string;
@@ -23,10 +24,12 @@ interface ChatMessage {
 }
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
+const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? API_BASE_URL.replace(/^http/, 'ws');
 
 export function ChatScreen() {
   const { roomId } = useRoute<RouteParams>().params;
   const { memberId } = useAuth();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [connected, setConnected] = useState(false);
@@ -48,10 +51,12 @@ export function ChatScreen() {
 
     async function connect() {
       const token = await getItem('deviceToken');
-      const wsUrl = API_BASE_URL.replace(/^http/, 'ws');
       const client = new Client({
-        brokerURL: `${wsUrl}/ws-native`,
+        brokerURL: `${WS_URL}/ws-native`,
         connectHeaders: { 'X-Device-Token': token ?? '' },
+        reconnectDelay: 2000,
+        heartbeatIncoming: 0,
+        heartbeatOutgoing: 0,
         onConnect: () => {
           if (!mounted) return;
           setConnected(true);
@@ -74,6 +79,10 @@ export function ChatScreen() {
           if (!mounted) return;
           setConnected(false);
           showAlert('채팅 오류', '서버에 연결할 수 없습니다.');
+        },
+        onWebSocketClose: () => {
+          if (!mounted) return;
+          setConnected(false);
         },
       });
       client.activate();
@@ -118,10 +127,10 @@ export function ChatScreen() {
       />
       {!connected && (
         <View style={styles.disconnectedBanner}>
-          <Text style={styles.disconnectedText}>연결 중...</Text>
+          <Text style={styles.disconnectedText}>채팅 서버에 연결 중...</Text>
         </View>
       )}
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: insets.bottom + 4 }]}>
         <TextInput
           style={styles.input}
           value={inputText}

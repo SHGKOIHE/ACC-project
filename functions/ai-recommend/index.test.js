@@ -3,8 +3,8 @@
 const { handler } = require('./index');
 const { calculateScore, detectCategory } = require('./rule_engine');
 
-// Gemini 항상 빈 문자열 반환으로 mocking
-jest.mock('./gemini_client', () => ({
+// Bedrock 항상 빈 문자열 반환으로 mocking
+jest.mock('./bedrock_client', () => ({
   generateExplanation: jest.fn().mockResolvedValue(''),
 }));
 

@@ -8,12 +8,12 @@ import org.springframework.stereotype.Component;
 public class NoOpNotificationAdapter implements NotificationPort {
 
     @Override
-    public void sendToRoom(Long roomId, String title, String body) {
+    public void sendToRoom(String roomId, String title, String body) {
         log.debug("NoOp notification → room {}: {}", roomId, title);
     }
 
     @Override
-    public void sendToMember(Long memberId, String title, String body) {
+    public void sendToMember(String memberId, String title, String body) {
         log.debug("NoOp notification → member {}: {}", memberId, title);
     }
 }

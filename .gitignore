@@ -26,6 +26,12 @@ node_modules/
 .expo/
 
 # React Native
-mobile/android/.gradle/
-mobile/android/app/build/
+mobile/android/
 mobile/ios/Pods/
+
+# OMC state
+.omc/
+
+# Build artifacts
+nohup.out
+functions/ai-recommend/function.zip

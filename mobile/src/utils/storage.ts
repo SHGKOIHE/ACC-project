@@ -10,3 +10,8 @@ export async function setItem(key: string, value: string): Promise<void> {
   if (Platform.OS === 'web') { localStorage.setItem(key, value); return; }
   return SecureStore.setItemAsync(key, value);
 }
+
+export async function removeItem(key: string): Promise<void> {
+  if (Platform.OS === 'web') { localStorage.removeItem(key); return; }
+  return SecureStore.deleteItemAsync(key);
+}

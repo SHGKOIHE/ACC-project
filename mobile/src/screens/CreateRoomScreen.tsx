@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as Location from 'expo-location';
 import { showAlert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -33,6 +34,12 @@ export function CreateRoomScreen() {
     accountNumber: '',
   });
 
+  const { data: meData } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiClient.get('/api/auth/me'),
+  });
+  const savedAddress: string = (meData as any)?.data?.address ?? '';
+
   const mutation = useMutation({
     mutationFn: (data: any) => apiClient.post('/api/rooms', data),
     onSuccess: () => {
@@ -60,6 +67,17 @@ export function CreateRoomScreen() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function fillCurrentLocation() {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+    const loc = await Location.getCurrentPositionAsync({});
+    setForm((prev) => ({
+      ...prev,
+      latitude: String(loc.coords.latitude),
+      longitude: String(loc.coords.longitude),
+    }));
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.label}>방 제목 *</Text>
@@ -83,6 +101,16 @@ export function CreateRoomScreen() {
 
       <Text style={styles.label}>주소 *</Text>
       <TextInput style={styles.input} value={form.restaurantAddress} onChangeText={(v) => update('restaurantAddress', v)} placeholder="주소" />
+      <View style={styles.addressBtnRow}>
+        <TouchableOpacity style={styles.locationBtn} onPress={fillCurrentLocation}>
+          <Text style={styles.locationBtnText}>📍 현재 위치 사용</Text>
+        </TouchableOpacity>
+        {savedAddress ? (
+          <TouchableOpacity style={styles.locationBtn} onPress={() => update('restaurantAddress', savedAddress)}>
+            <Text style={styles.locationBtnText}>🏠 내 저장 주소</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       <Text style={styles.label}>배달비 (원)</Text>
       <TextInput style={styles.input} value={form.deliveryFee} onChangeText={(v) => update('deliveryFee', v)} placeholder="3000" keyboardType="numeric" />
@@ -123,4 +151,7 @@ const styles = StyleSheet.create({
   button: { marginTop: 32, backgroundColor: '#FF6B35', borderRadius: 8, padding: 16, alignItems: 'center' },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  addressBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  locationBtn: { alignSelf: 'flex-start' },
+  locationBtnText: { color: '#FF6B35', fontSize: 13, fontWeight: '600' },
 });

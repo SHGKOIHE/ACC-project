@@ -1,35 +1,38 @@
 package com.foodgroup.room.service;
 
+import com.foodgroup.auth.repository.MemberPort;
 import com.foodgroup.common.exception.BusinessException;
 import com.foodgroup.common.exception.ErrorCode;
 import com.foodgroup.common.notification.NotificationPort;
+import com.foodgroup.order.repository.OrderItemPort;
 import com.foodgroup.room.domain.MeetingType;
 import com.foodgroup.room.domain.Room;
 import com.foodgroup.room.domain.RoomParticipant;
 import com.foodgroup.room.domain.RoomStatus;
-import com.foodgroup.order.repository.OrderItemRepository;
-import com.foodgroup.room.repository.RoomParticipantRepository;
-import com.foodgroup.room.repository.RoomRepository;
+import com.foodgroup.room.repository.RoomParticipantPort;
+import com.foodgroup.room.repository.RoomPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class RoomService {
 
-    private final RoomRepository roomRepository;
-    private final RoomParticipantRepository roomParticipantRepository;
-    private final OrderItemRepository orderItemRepository;
+    private final RoomPort roomPort;
+    private final RoomParticipantPort roomParticipantPort;
+    private final OrderItemPort orderItemPort;
     private final RoomStateValidator stateValidator;
     private final NotificationPort notificationPort;
+    private final MemberPort memberPort;
 
-    @Transactional
     public Room createRoom(CreateRoomCommand cmd) {
-        Room room = roomRepository.save(Room.builder()
+        LocalDateTime now = LocalDateTime.now();
+        Room room = roomPort.save(Room.builder()
+                .id(UUID.randomUUID().toString())
                 .hostId(cmd.hostId())
                 .title(cmd.title())
                 .meetingType(cmd.meetingType())
@@ -45,60 +48,68 @@ public class RoomService {
                 .accountNumber(cmd.accountNumber())
                 .accountHolder(cmd.accountHolder())
                 .bankName(cmd.bankName())
+                .status(RoomStatus.OPEN)
+                .currentParticipantCount(1)
+                .createdAt(now)
+                .updatedAt(now)
                 .build());
 
-        roomParticipantRepository.save(RoomParticipant.builder()
+        roomParticipantPort.save(RoomParticipant.builder()
+                .id(UUID.randomUUID().toString())
                 .roomId(room.getId())
                 .memberId(cmd.hostId())
+                .joinedAt(now)
                 .build());
 
         return room;
     }
 
-    @Transactional(readOnly = true)
-    public Room getRoom(Long roomId) {
+    public Room getRoom(String roomId) {
         return findRoomOrThrow(roomId);
     }
 
-    @Transactional(readOnly = true)
-    public boolean isParticipant(Long roomId, Long memberId) {
-        return roomParticipantRepository.existsByRoomIdAndMemberId(roomId, memberId);
+    public boolean isParticipant(String roomId, String memberId) {
+        return roomParticipantPort.existsByRoomIdAndMemberId(roomId, memberId);
     }
 
-    @Transactional(readOnly = true)
     public List<Room> searchRooms(String category, MeetingType meetingType,
                                    Double lat, Double lng, Double radiusMeters) {
-        List<Room> rooms = roomRepository.searchRooms(category, meetingType);
-        if (meetingType == MeetingType.DINE_OUT && lat != null && lng != null) {
-            double radius = (radiusMeters != null) ? radiusMeters : 1000.0;
-            return rooms.stream()
-                    .filter(r -> haversineMeters(lat, lng, r.getLatitude(), r.getLongitude()) <= radius)
-                    .toList();
-        }
-        return rooms;
+        List<Room> rooms = roomPort.scanByStatus(RoomStatus.OPEN);
+        return rooms.stream()
+                .filter(r -> category == null || category.equals(r.getRestaurantCategory()))
+                .filter(r -> meetingType == null || meetingType == r.getMeetingType())
+                .filter(r -> {
+                    if (meetingType == MeetingType.DINE_OUT && lat != null && lng != null) {
+                        double radius = (radiusMeters != null) ? radiusMeters : 1000.0;
+                        return haversineMeters(lat, lng, r.getLatitude(), r.getLongitude()) <= radius;
+                    }
+                    return true;
+                })
+                .toList();
     }
 
-    @Transactional
-    public void joinRoom(Long roomId, Long memberId) {
+    public void joinRoom(String roomId, String memberId) {
         Room room = findRoomOrThrow(roomId);
         if (room.getStatus() != RoomStatus.OPEN) {
             throw new BusinessException(ErrorCode.ROOM_STATUS_INVALID);
         }
-        if (roomParticipantRepository.existsByRoomIdAndMemberId(roomId, memberId)) {
+        if (roomParticipantPort.existsByRoomIdAndMemberId(roomId, memberId)) {
             throw new BusinessException(ErrorCode.ALREADY_JOINED);
         }
         if (room.getCurrentParticipantCount() >= room.getMaxParticipants()) {
             throw new BusinessException(ErrorCode.ROOM_FULL);
         }
-        roomParticipantRepository.save(RoomParticipant.builder()
+        roomParticipantPort.save(RoomParticipant.builder()
+                .id(UUID.randomUUID().toString())
                 .roomId(roomId)
                 .memberId(memberId)
+                .joinedAt(LocalDateTime.now())
                 .build());
         room.incrementParticipantCount();
+        roomPort.save(room);
     }
 
-    @Transactional
-    public void leaveRoom(Long roomId, Long memberId) {
+    public void leaveRoom(String roomId, String memberId) {
         Room room = findRoomOrThrow(roomId);
         if (room.getHostId().equals(memberId)) {
             throw new BusinessException(ErrorCode.HOST_CANNOT_LEAVE);
@@ -106,49 +117,74 @@ public class RoomService {
         if (room.getStatus() != RoomStatus.OPEN) {
             throw new BusinessException(ErrorCode.ROOM_STATUS_INVALID);
         }
-        RoomParticipant participant = roomParticipantRepository
+        RoomParticipant participant = roomParticipantPort
                 .findByRoomIdAndMemberId(roomId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_ROOM_PARTICIPANT));
-        roomParticipantRepository.delete(participant);
+        roomParticipantPort.delete(participant);
         room.decrementParticipantCount();
-        orderItemRepository.deleteByRoomIdAndMemberId(roomId, memberId);
+        roomPort.save(room);
+        orderItemPort.deleteByRoomIdAndMemberId(roomId, memberId);
     }
 
-    @Transactional
-    public void closeRoom(Long roomId, Long hostId) {
+    public void closeRoom(String roomId, String hostId) {
         Room room = findRoomOrThrow(roomId);
         requireHost(room, hostId);
-        if (!orderItemRepository.existsByRoomId(roomId)) {
+        if (!orderItemPort.existsByRoomId(roomId)) {
             throw new BusinessException(ErrorCode.ORDER_NOT_CONFIRMABLE);
         }
         validateAndTransition(room, RoomStatus.CLOSED);
+        roomPort.save(room);
     }
 
-    @Transactional
-    public void cancelRoom(Long roomId, Long hostId) {
+    public void cancelRoom(String roomId, String hostId) {
         Room room = findRoomOrThrow(roomId);
         requireHost(room, hostId);
         if (room.getStatus() == RoomStatus.COMPLETED) {
             throw new BusinessException(ErrorCode.ROOM_COMPLETED);
         }
         validateAndTransition(room, RoomStatus.CANCELLED);
+        roomPort.save(room);
         notificationPort.sendToRoom(roomId, "방이 취소되었습니다",
                 room.getTitle() + " 방이 방장에 의해 취소되었습니다.");
     }
 
-    @Transactional
-    public void completeRoom(Long roomId, Long hostId) {
+    public void deliverRoom(String roomId, String hostId) {
+        Room room = findRoomOrThrow(roomId);
+        requireHost(room, hostId);
+        validateAndTransition(room, RoomStatus.DELIVERING);
+        roomPort.save(room);
+        notificationPort.sendToRoom(roomId, "배달 시작",
+                room.getTitle() + " 방의 배달이 시작되었습니다.");
+    }
+
+    public void completeRoom(String roomId, String hostId) {
         Room room = findRoomOrThrow(roomId);
         requireHost(room, hostId);
         validateAndTransition(room, RoomStatus.COMPLETED);
+        roomPort.save(room);
+        notificationPort.sendToRoom(roomId, "배달 완료",
+                room.getTitle() + " 방의 배달이 완료되었습니다. 정산 내역을 확인하세요.");
     }
 
-    /** OrderService에서 주문 확정 후 호출 */
-    @Transactional
-    public void transitionToConfirmed(Long roomId) {
+    public void transitionToConfirmed(String roomId) {
         Room room = findRoomOrThrow(roomId);
         validateAndTransition(room, RoomStatus.CONFIRMED);
+        roomPort.save(room);
     }
+
+    public List<ParticipantInfo> getParticipants(String roomId) {
+        Room room = findRoomOrThrow(roomId);
+        return roomParticipantPort.findByRoomId(roomId).stream()
+                .map(p -> {
+                    String nickname = memberPort.findById(p.getMemberId())
+                            .map(m -> m.getNickname())
+                            .orElse(p.getMemberId());
+                    return new ParticipantInfo(p.getMemberId(), nickname, p.getMemberId().equals(room.getHostId()));
+                })
+                .toList();
+    }
+
+    public record ParticipantInfo(String memberId, String nickname, boolean isHost) {}
 
     // --- private helpers ---
 
@@ -159,14 +195,14 @@ public class RoomService {
         room.updateStatus(to);
     }
 
-    private void requireHost(Room room, Long memberId) {
+    private void requireHost(Room room, String memberId) {
         if (!room.getHostId().equals(memberId)) {
             throw new BusinessException(ErrorCode.NOT_ROOM_HOST);
         }
     }
 
-    private Room findRoomOrThrow(Long roomId) {
-        return roomRepository.findById(roomId)
+    private Room findRoomOrThrow(String roomId) {
+        return roomPort.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
     }
 
@@ -181,7 +217,7 @@ public class RoomService {
     }
 
     public record CreateRoomCommand(
-            Long hostId, String title, MeetingType meetingType,
+            String hostId, String title, MeetingType meetingType,
             String restaurantName, String restaurantAddress, String restaurantCategory,
             Double latitude, Double longitude, Integer deliveryFee, Integer maxParticipants,
             LocalDateTime closedAt, String meetingAddress,

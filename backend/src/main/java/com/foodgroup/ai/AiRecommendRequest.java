@@ -3,7 +3,7 @@ package com.foodgroup.ai;
 import java.util.List;
 
 public record AiRecommendRequest(
-        Long roomId,
+        String roomId,
         List<ParticipantInfo> participants,
         FilterInfo filters
 ) {
@@ -19,6 +19,9 @@ public record AiRecommendRequest(
 
     public record FilterInfo(
             String category,
-            Integer maxDeliveryFee
+            Integer maxDeliveryFee,
+            String userMessage,
+            Double latitude,
+            Double longitude
     ) {}
 }

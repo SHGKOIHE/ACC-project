@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -38,13 +37,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ErrorResponse.of(ErrorCode.INVALID_INPUT.getCode(), e.getMessage(), req.getRequestURI()));
-    }
-
-    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ErrorResponse> handleOptimisticLock(HttpServletRequest req) {
-        return ResponseEntity
-                .status(ErrorCode.OPTIMISTIC_LOCK.getHttpStatus())
-                .body(ErrorResponse.of(ErrorCode.OPTIMISTIC_LOCK.getCode(), ErrorCode.OPTIMISTIC_LOCK.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)

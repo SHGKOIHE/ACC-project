@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Console appender (all profiles) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!--
+        CloudWatch log shipping is handled by CloudWatchLogAppender (@Component).
+        When aws.cloudwatch.enabled=true, that bean registers itself on the root
+        logger programmatically via @PostConstruct, so no XML declaration is needed.
+        This keeps local development unaffected (the bean is never created when the
+        property is false or absent).
+    -->
+
+</configuration>

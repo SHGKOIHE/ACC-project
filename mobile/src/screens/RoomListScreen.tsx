@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +21,7 @@ const FILTERS: { label: string; value: MeetingType | 'ALL' }[] = [
 export function RoomListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [filter, setFilter] = useState<MeetingType | 'ALL'>('ALL');
+  const insets = useSafeAreaInsets();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['rooms', filter],
@@ -34,7 +36,7 @@ export function RoomListScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, { paddingTop: insets.top + 8 }]}>
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f.value}
@@ -44,6 +46,9 @@ export function RoomListScreen() {
             <Text style={[styles.filterText, filter === f.value && styles.filterTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity onPress={() => refetch()} style={styles.refreshButton}>
+          <Text style={styles.refreshText}>↻</Text>
+        </TouchableOpacity>
       </View>
       <FlatList
         data={rooms}
@@ -74,4 +79,6 @@ const styles = StyleSheet.create({
   emptyText: { color: '#999', fontSize: 15 },
   fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: '#FF6B35', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 14, elevation: 4 },
   fabText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  refreshButton: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 6, justifyContent: 'center' },
+  refreshText: { fontSize: 18, color: '#FF6B35' },
 });

@@ -3,12 +3,12 @@ package com.foodgroup.room.service;
 import com.foodgroup.common.exception.BusinessException;
 import com.foodgroup.common.exception.ErrorCode;
 import com.foodgroup.common.notification.NotificationPort;
-import com.foodgroup.order.repository.OrderItemRepository;
+import com.foodgroup.order.repository.OrderItemPort;
 import com.foodgroup.room.domain.MeetingType;
 import com.foodgroup.room.domain.Room;
 import com.foodgroup.room.domain.RoomStatus;
-import com.foodgroup.room.repository.RoomParticipantRepository;
-import com.foodgroup.room.repository.RoomRepository;
+import com.foodgroup.room.repository.RoomParticipantPort;
+import com.foodgroup.room.repository.RoomPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,19 +25,19 @@ import static org.mockito.BDDMockito.*;
 class RoomServiceTest {
 
     @InjectMocks RoomService roomService;
-    @Mock RoomRepository roomRepository;
-    @Mock RoomParticipantRepository roomParticipantRepository;
-    @Mock OrderItemRepository orderItemRepository;
+    @Mock RoomPort roomPort;
+    @Mock RoomParticipantPort roomParticipantPort;
+    @Mock OrderItemPort orderItemPort;
     @Spy RoomStateValidator stateValidator;
     @Mock NotificationPort notificationPort;
 
     @Test
     void joinRoom_방_만원_예외() {
-        Room room = buildRoom(RoomStatus.OPEN, 1L, 2, 2);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
-        given(roomParticipantRepository.existsByRoomIdAndMemberId(1L, 2L)).willReturn(false);
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 2, 2);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+        given(roomParticipantPort.existsByRoomIdAndMemberId("room-1", "member-2")).willReturn(false);
 
-        assertThatThrownBy(() -> roomService.joinRoom(1L, 2L))
+        assertThatThrownBy(() -> roomService.joinRoom("room-1", "member-2"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ROOM_FULL);
@@ -45,11 +45,11 @@ class RoomServiceTest {
 
     @Test
     void joinRoom_이미_참여_예외() {
-        Room room = buildRoom(RoomStatus.OPEN, 1L, 3, 1);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
-        given(roomParticipantRepository.existsByRoomIdAndMemberId(1L, 2L)).willReturn(true);
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 1);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+        given(roomParticipantPort.existsByRoomIdAndMemberId("room-1", "member-2")).willReturn(true);
 
-        assertThatThrownBy(() -> roomService.joinRoom(1L, 2L))
+        assertThatThrownBy(() -> roomService.joinRoom("room-1", "member-2"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ALREADY_JOINED);
@@ -57,10 +57,10 @@ class RoomServiceTest {
 
     @Test
     void joinRoom_마감후_예외() {
-        Room room = buildRoom(RoomStatus.CLOSED, 1L, 3, 1);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
+        Room room = buildRoom(RoomStatus.CLOSED, "host-1", 3, 1);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.joinRoom(1L, 2L))
+        assertThatThrownBy(() -> roomService.joinRoom("room-1", "member-2"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ROOM_STATUS_INVALID);
@@ -68,10 +68,10 @@ class RoomServiceTest {
 
     @Test
     void leaveRoom_방장_탈퇴_예외() {
-        Room room = buildRoom(RoomStatus.OPEN, 1L, 3, 2);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 2);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.leaveRoom(1L, 1L))
+        assertThatThrownBy(() -> roomService.leaveRoom("room-1", "host-1"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.HOST_CANNOT_LEAVE);
@@ -79,10 +79,10 @@ class RoomServiceTest {
 
     @Test
     void leaveRoom_마감후_비방장_예외() {
-        Room room = buildRoom(RoomStatus.CLOSED, 1L, 3, 2);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
+        Room room = buildRoom(RoomStatus.CLOSED, "host-1", 3, 2);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.leaveRoom(1L, 2L))
+        assertThatThrownBy(() -> roomService.leaveRoom("room-1", "member-2"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ROOM_STATUS_INVALID);
@@ -90,10 +90,10 @@ class RoomServiceTest {
 
     @Test
     void cancelRoom_완료방_예외() {
-        Room room = buildRoom(RoomStatus.COMPLETED, 1L, 3, 2);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
+        Room room = buildRoom(RoomStatus.COMPLETED, "host-1", 3, 2);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.cancelRoom(1L, 1L))
+        assertThatThrownBy(() -> roomService.cancelRoom("room-1", "host-1"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ROOM_COMPLETED);
@@ -101,10 +101,10 @@ class RoomServiceTest {
 
     @Test
     void cancelRoom_비방장_예외() {
-        Room room = buildRoom(RoomStatus.OPEN, 1L, 3, 1);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 1);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.cancelRoom(1L, 2L))
+        assertThatThrownBy(() -> roomService.cancelRoom("room-1", "member-2"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.NOT_ROOM_HOST);
@@ -112,18 +112,19 @@ class RoomServiceTest {
 
     @Test
     void closeRoom_정상() {
-        Room room = buildRoom(RoomStatus.OPEN, 1L, 3, 1);
-        given(roomRepository.findById(1L)).willReturn(Optional.of(room));
-        given(orderItemRepository.existsByRoomId(1L)).willReturn(true);
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 1);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+        given(orderItemPort.existsByRoomId("room-1")).willReturn(true);
+        given(roomPort.save(any())).willAnswer(inv -> inv.getArgument(0));
 
-        roomService.closeRoom(1L, 1L);
+        roomService.closeRoom("room-1", "host-1");
 
         assertThat(room.getStatus()).isEqualTo(RoomStatus.CLOSED);
     }
 
-    private Room buildRoom(RoomStatus status, Long hostId, int max, int current) {
+    private Room buildRoom(RoomStatus status, String hostId, int max, int current) {
         return Room.builder()
-                .id(1L).hostId(hostId).title("테스트방")
+                .id("room-1").hostId(hostId).title("테스트방")
                 .meetingType(MeetingType.DELIVERY)
                 .restaurantName("테스트식당").restaurantAddress("서울시")
                 .latitude(37.5).longitude(127.0)

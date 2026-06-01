@@ -5,8 +5,6 @@ import com.foodgroup.common.security.MemberPrincipal;
 import com.foodgroup.room.domain.MeetingType;
 import com.foodgroup.room.domain.Room;
 import com.foodgroup.room.service.RoomService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Tag(name = "Room", description = "방 API")
 @RestController
 @RequestMapping("/api/rooms")
 @RequiredArgsConstructor
@@ -25,7 +22,6 @@ public class RoomController {
 
     private final RoomService roomService;
 
-    @Operation(summary = "방 생성")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<RoomResponse> create(
@@ -35,7 +31,6 @@ public class RoomController {
         return ApiResponse.ok(RoomResponse.from(room));
     }
 
-    @Operation(summary = "방 목록 조회")
     @GetMapping
     public ApiResponse<List<RoomResponse>> search(
             @RequestParam(required = false) String category,
@@ -48,56 +43,68 @@ public class RoomController {
                         .stream().map(RoomResponse::from).toList());
     }
 
-    @Operation(summary = "방 상세 조회")
     @GetMapping("/{id}")
-    public ApiResponse<RoomResponse> get(@PathVariable Long id,
+    public ApiResponse<RoomResponse> get(@PathVariable String id,
                                          @AuthenticationPrincipal MemberPrincipal principal) {
         Room room = roomService.getRoom(id);
         boolean isParticipant = roomService.isParticipant(id, principal.memberId());
-        return ApiResponse.ok(RoomResponse.from(room, isParticipant));
+        boolean isHost = room.getHostId().equals(principal.memberId());
+        return ApiResponse.ok(RoomResponse.from(room, isParticipant, isHost));
     }
 
-    @Operation(summary = "방 참여")
     @PostMapping("/{id}/join")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void join(@PathVariable Long id,
+    public void join(@PathVariable String id,
                      @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.joinRoom(id, principal.memberId());
     }
 
-    @Operation(summary = "방 탈퇴")
     @PostMapping("/{id}/leave")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void leave(@PathVariable Long id,
+    public void leave(@PathVariable String id,
                       @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.leaveRoom(id, principal.memberId());
     }
 
-    @Operation(summary = "방 마감 (방장)")
     @PostMapping("/{id}/close")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void close(@PathVariable Long id,
+    public void close(@PathVariable String id,
                       @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.closeRoom(id, principal.memberId());
     }
 
-    @Operation(summary = "방 취소 (방장)")
+    @GetMapping("/{id}/participants")
+    public ApiResponse<List<ParticipantResponse>> getParticipants(@PathVariable String id) {
+        return ApiResponse.ok(
+                roomService.getParticipants(id).stream()
+                        .map(p -> new ParticipantResponse(p.memberId(), p.nickname(), p.isHost()))
+                        .toList());
+    }
+
     @PostMapping("/{id}/cancel")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void cancel(@PathVariable Long id,
+    public void cancel(@PathVariable String id,
                        @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.cancelRoom(id, principal.memberId());
     }
 
-    @Operation(summary = "완료 처리 (방장)")
+    @PostMapping("/{id}/deliver")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deliver(@PathVariable String id,
+                        @AuthenticationPrincipal MemberPrincipal principal) {
+        roomService.deliverRoom(id, principal.memberId());
+    }
+
     @PostMapping("/{id}/complete")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void complete(@PathVariable Long id,
+    public void complete(@PathVariable String id,
                          @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.completeRoom(id, principal.memberId());
     }
 
     // --- inner records ---
+
+    public record ParticipantResponse(String memberId, String nickname, boolean isHost) {}
 
     public record CreateRoomRequest(
             @NotBlank @Size(min = 2, max = 30) String title,
@@ -115,7 +122,7 @@ public class RoomController {
             String accountHolder,
             String bankName
     ) {
-        public RoomService.CreateRoomCommand toCommand(Long hostId) {
+        public RoomService.CreateRoomCommand toCommand(String hostId) {
             return new RoomService.CreateRoomCommand(
                     hostId, title, meetingType, restaurantName, restaurantAddress,
                     restaurantCategory, latitude, longitude, deliveryFee, maxParticipants,
@@ -124,15 +131,15 @@ public class RoomController {
     }
 
     public record RoomResponse(
-            Long id, Long hostId, String title, String meetingType,
+            String id, String hostId, String title, String meetingType,
             String restaurantName, String restaurantAddress, String restaurantCategory,
             Double latitude, Double longitude, Integer deliveryFee,
             Integer maxParticipants, Integer currentParticipantCount,
             String status, LocalDateTime closedAt, String meetingAddress,
             String accountHolder, String bankName, LocalDateTime createdAt,
-            boolean isParticipant
+            boolean isParticipant, boolean isHost
     ) {
-        public static RoomResponse from(Room r, boolean isParticipant) {
+        public static RoomResponse from(Room r, boolean isParticipant, boolean isHost) {
             return new RoomResponse(
                     r.getId(), r.getHostId(), r.getTitle(), r.getMeetingType().name(),
                     r.getRestaurantName(), r.getRestaurantAddress(), r.getRestaurantCategory(),
@@ -140,11 +147,15 @@ public class RoomController {
                     r.getMaxParticipants(), r.getCurrentParticipantCount(),
                     r.getStatus().name(), r.getClosedAt(), r.getMeetingAddress(),
                     r.getAccountHolder(), r.getBankName(), r.getCreatedAt(),
-                    isParticipant);
+                    isParticipant, isHost);
+        }
+
+        public static RoomResponse from(Room r, boolean isParticipant) {
+            return from(r, isParticipant, false);
         }
 
         public static RoomResponse from(Room r) {
-            return from(r, false);
+            return from(r, false, false);
         }
     }
 }

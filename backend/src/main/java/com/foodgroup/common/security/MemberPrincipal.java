@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-public record MemberPrincipal(Long memberId, String nickname) implements UserDetails {
+public record MemberPrincipal(String memberId, String nickname) implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -16,5 +16,5 @@ public record MemberPrincipal(Long memberId, String nickname) implements UserDet
     public String getPassword() { return null; }
 
     @Override
-    public String getUsername() { return String.valueOf(memberId); }
+    public String getUsername() { return memberId; }
 }

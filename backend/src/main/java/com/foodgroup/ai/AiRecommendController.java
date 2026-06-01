@@ -1,14 +1,14 @@
 package com.foodgroup.ai;
 
-import com.foodgroup.auth.repository.MemberRepository;
+import com.foodgroup.auth.repository.MemberPort;
 import com.foodgroup.common.dto.ApiResponse;
 import com.foodgroup.common.exception.BusinessException;
 import com.foodgroup.common.exception.ErrorCode;
 import com.foodgroup.common.security.MemberPrincipal;
-import com.foodgroup.order.repository.OrderItemRepository;
+import com.foodgroup.order.repository.OrderItemPort;
 import com.foodgroup.room.domain.Room;
-import com.foodgroup.room.repository.RoomParticipantRepository;
-import com.foodgroup.room.repository.RoomRepository;
+import com.foodgroup.room.repository.RoomParticipantPort;
+import com.foodgroup.room.repository.RoomPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,32 +24,32 @@ import java.util.List;
 public class AiRecommendController {
 
     private final AiRecommendClient aiRecommendClient;
-    private final RoomParticipantRepository roomParticipantRepository;
-    private final RoomRepository roomRepository;
-    private final MemberRepository memberRepository;
-    private final OrderItemRepository orderItemRepository;
+    private final RoomParticipantPort roomParticipantPort;
+    private final RoomPort roomPort;
+    private final MemberPort memberPort;
+    private final OrderItemPort orderItemPort;
 
     @PostMapping
     public ApiResponse<AiRecommendResponse> recommend(
-            @PathVariable Long roomId,
+            @PathVariable String roomId,
             @AuthenticationPrincipal MemberPrincipal principal) {
 
-        if (!roomParticipantRepository.existsByRoomIdAndMemberId(roomId, principal.memberId())) {
+        if (!roomParticipantPort.existsByRoomIdAndMemberId(roomId, principal.memberId())) {
             throw new BusinessException(ErrorCode.NOT_ROOM_PARTICIPANT);
         }
 
-        Room room = roomRepository.findById(roomId)
+        Room room = roomPort.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
         List<AiRecommendRequest.ParticipantInfo> participants =
-                roomParticipantRepository.findByRoomId(roomId).stream()
+                roomParticipantPort.findByRoomId(roomId).stream()
                         .map(p -> {
-                            String nickname = memberRepository.findById(p.getMemberId())
+                            String nickname = memberPort.findById(p.getMemberId())
                                     .map(m -> m.getNickname())
                                     .orElse("알 수 없음");
 
                             List<AiRecommendRequest.OrderItemInfo> orderItems =
-                                    orderItemRepository.findByRoomIdAndMemberId(roomId, p.getMemberId())
+                                    orderItemPort.findByRoomIdAndMemberId(roomId, p.getMemberId())
                                             .stream()
                                             .map(oi -> new AiRecommendRequest.OrderItemInfo(
                                                     oi.getMenuName(), oi.getPrice()))
@@ -64,11 +64,14 @@ public class AiRecommendController {
                 participants,
                 new AiRecommendRequest.FilterInfo(
                         room.getRestaurantCategory(),
-                        room.getDeliveryFee()
+                        room.getDeliveryFee(),
+                        null,
+                        room.getLatitude(),
+                        room.getLongitude()
                 )
         );
 
-        AiRecommendResponse response = aiRecommendClient.recommend(request).block();
+        AiRecommendResponse response = aiRecommendClient.recommend(request);
         return ApiResponse.ok(response);
     }
 }

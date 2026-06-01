@@ -1,84 +1,92 @@
 # System Architecture
 # 배달비 절약 음식 공동구매 앱
 
-**작성일**: 2026-05-24
-**작성자**: arch
-**기술 스택**: Spring Boot 3.3 / Java 17, React Native (Expo), AWS Lambda (Node.js), PostgreSQL, Redis, Docker Compose, CloudFront
+**최종 수정**: 2026-06-01
+**기술 스택**: Spring Boot 3.3 / Java 17 (AWS Lambda), React Native (Expo), AWS Lambda (Node.js 20), DynamoDB, Lightsail
 
 ---
 
 ## 1. 전체 시스템 구성도
 
 ```
-                          [React Native App]
-                          (Expo / iOS+Android)
-                                |
-                 +--------------+-------+-------+
-                 |              |       |       |
-                 v              v       v       v
-          [CloudFront]   [Cloudflare] [FCM]  [Kakao 지도 SDK]
-          (S3 이미지CDN)  (API/WS)  (Google) (클라이언트 직접 호출)
-                 |              |       ^       |
-                 v              v       |       v
-         +------[S3]    [미니PC (온프레미스)]   식당 검색 결과를
-         |              |  Docker Compose  |   방 개설 시 서버 전송
-         |              |                  |   (restaurantName,
-         |   +----------+----------+-------+    restaurantCategory,
-         |   |          |          |            latitude, longitude)
-         |   v          v          v
-         | [Spring   [Post-     [Redis]   [Scheduler]
-         |  Boot     greSQL]    :6379     (자동마감)
-         |  :8080    :5432]       |          |
-         |   |          |         |          |
-         |   +----------+---------+----------+
-         |              |
-         |              v
-         |   [API Gateway] -----> [Lambda]
-         |   (AWS)                (Node.js)
-         |                           |
-         |                           v
-         |                      [Gemini API]
-         |                      (설명 생성)
-         |
-         +--- [CloudWatch] (미니PC 헬스체크 + 알람)
+                        [React Native App]
+                        (Expo / Android)
+                               |
+              +----------------+------------------+
+              |                |                  |
+              v                v                  v
+     [API Gateway]      [Lightsail]         [Kakao 지도 SDK]
+  execute-api.ap-      43.201.33.167        (WebView 직접 호출)
+  northeast-2.aws       (WebSocket)
+              |                |
+              v                v
+        [Lambda]         [chat-server]
+    foodgroup-backend   (Spring Boot WebSocket)
+      (java17, 1GB)             |
+              |                 v
+              v          [DynamoDB]
+        [DynamoDB]       ChatMessages
+   Members / Rooms /      (roomId HASH,
+   RoomParticipants /     createdAtId RANGE,
+   OrderItems /           TTL 30일)
+   Settlements /
+   MemberSettlements
+              |
+              v
+        [Lambda]
+    food-recommend-api
+      (nodejs20.x)
+              |
+              v
+     [Bedrock Claude 3 Haiku]
+      (anthropic.claude-3-haiku,
+       ap-northeast-2)
+              |
+         [S3 Bucket]
+       food-app-assets-sj
+       (Lambda 배포 JAR)
+
+[AWS SES] — 이메일 인증
+[FCM]     — 푸시 알림
 ```
 
 ---
 
 ## 2. 컴포넌트 간 통신 흐름
 
-### 2-1. 일반 API 요청 (방 생성, 주문 등)
+### 2-1. 일반 API 요청
 
 ```
 React Native
     |
-    | HTTPS
+    | HTTPS  X-Device-Token 헤더
     v
-Cloudflare Tunnel (SSL 종료, 고정 도메인)
+API Gateway (40ocxlcwfl.execute-api.ap-northeast-2.amazonaws.com)
     |
-    | HTTP (localhost 포워딩)
+    | Lambda invoke
     v
-Spring Boot :8080
+Spring Boot on Lambda (foodgroup-backend, java17, 1GB, 60s timeout)
     |
-    +---> PostgreSQL (JDBC)     읽기/쓰기
-    +---> Redis (Lettuce)       세션 캐시, 디바이스토큰 캐시
+    +---> DynamoDB (AWS SDK Enhanced Client)
     |
     v
 ApiResponse<T> JSON 응답
 ```
 
-### 2-2. 이미지 로딩 (식당 사진, 메뉴 이미지)
+### 2-2. 실시간 채팅 (WebSocket)
 
 ```
-React Native
+React Native (STOMP over WebSocket)
     |
-    | HTTPS
+    | ws://43.201.33.167
     v
-CloudFront (캐시 HIT 시 즉시 응답)
+Lightsail (nginx) → chat-server (Spring Boot WebSocket)
     |
-    | Cache MISS
+    +---> /topic/room/{roomId}/chat       채팅 메시지 브로드캐스트
+    +---> /topic/room/{roomId}/members    참여자 변경 알림
+    |
     v
-S3 Bucket (이미지 원본)
+DynamoDB ChatMessages (읽기/쓰기, TTL 30일)
 ```
 
 ### 2-3. AI 추천 요청
@@ -88,173 +96,73 @@ React Native
     |
     | POST /api/ai/recommend
     v
-Spring Boot
+API Gateway → Lambda (foodgroup-backend)
     |
-    | 1) 규칙 엔진: 카테고리/거리/가격 필터링 + 랭킹
-    | 2) Top 3~5 결과를 Lambda에 전달
+    | AWS SDK 직접 invoke (X-Internal-Key 헤더 포함)
     v
-API Gateway (HTTPS)
+Lambda (food-recommend-api, nodejs20.x)
+    |
+    | 규칙 엔진 → Bedrock Claude 3 Haiku (설명 생성)
+    v
+{ recommendations, explanation } 반환
     |
     v
-Lambda (Node.js)
-    |
-    | Gemini Flash API 호출
-    | "이 식당을 추천하는 이유" 설명 생성
-    v
-설명 텍스트 반환 --> Spring Boot --> React Native
+React Native
 ```
 
 ---
 
-## 3. Unit 2 — WebSocket/FCM 연동 구조
+## 3. DynamoDB 테이블 구성
 
-```
-React Native (STOMP Client)
-    |
-    | ws:// (Cloudflare Tunnel)
-    v
-Spring Boot [SimpMessagingTemplate]
-    |
-    +---> /topic/room/{roomId}/chat       채팅 메시지 브로드캐스트
-    +---> /topic/room/{roomId}/members    참여자 변경 알림
-    +---> /user/queue/notification        개인 알림
-    |
-    +---> Redis Pub/Sub (단일 서버이지만 확장 대비)
-    |
-    v
-[FCM 발송 흐름]
-
-Spring Boot (NotificationPort 구현체)
-    |
-    | firebase-admin SDK
-    v
-FCM Server (Google)
-    |
-    | 푸시 알림
-    v
-React Native (백그라운드 수신)
-
-[FCM 발송 트리거]
-+------------------------------------------+
-| 이벤트               | 수신 대상         |
-|----------------------|-------------------|
-| 새 참여자 입장        | 방 전체 참여자     |
-| 참여자 탈퇴           | 방 전체 참여자     |
-| 방 마감 (수동/자동)    | 방 전체 참여자     |
-| 주문 확정             | 방 전체 참여자     |
-| 방 취소               | 방 전체 참여자     |
-| 채팅 메시지 (백그라운드)| 해당 방 참여자     |
-+------------------------------------------+
-```
+| 테이블 | PK | SK | 비고 |
+|--------|----|----|------|
+| Members | id (S, HASH) | - | deviceToken GSI |
+| Rooms | id (S, HASH) | - | |
+| RoomParticipants | id (S, HASH) `roomId#memberId` | - | roomId GSI |
+| OrderItems | id (S, HASH) | - | roomId GSI |
+| Settlements | roomId (S, HASH) | - | |
+| MemberSettlements | settlementId (S, HASH) | memberId (S, RANGE) | |
+| ChatMessages | roomId (S, HASH) | createdAtId (S, RANGE) | TTL 30일 |
 
 ---
 
-## 4. Unit 3 — Lambda AI 추천 연동 구조
+## 4. 인증 방식
 
-```
-[Spring Boot]                          [AWS]
-     |                                   |
-     | 1. 규칙 엔진 필터링                 |
-     |    - 카테고리 매칭                  |
-     |    - 거리 필터 (Haversine)          |
-     |    - 가격대 필터                    |
-     |    - 모임유형 필터                  |
-     |    - 참여율/마감시간 랭킹            |
-     |                                   |
-     | 2. Top 3~5 식당 + 사용자 조건       |
-     |    POST /recommend                |
-     +---------------------------------->|
-     |                              [API Gateway]
-     |                                   |
-     |                              [Lambda]
-     |                                   |
-     |                  3. Gemini Flash 호출
-     |                     프롬프트:
-     |                     - 식당 정보 (이름,메뉴,가격)
-     |                     - 사용자 조건 (카테고리,거리,가격대)
-     |                     - "왜 이 식당을 추천하는지 2줄 설명"
-     |                                   |
-     |                  4. 설명 텍스트 생성
-     |<----------------------------------+
-     |
-     | 5. 식당 정보 + 설명 텍스트 조합하여 응답
-     v
-[React Native]
-  - 식당명, 거리, 예상 배달비
-  - AI 설명: "이 식당은 현재 3명이 참여 중이라
-    배달비가 1,200원으로 줄어요.
-    인기 메뉴 김치찌개가 7,000원으로 가성비 좋아요."
-```
-
-### Lambda 요청/응답 형식
-
-```json
-// Request (Spring Boot -> Lambda)
-{
-  "restaurants": [
-    {
-      "name": "한솥도시락",
-      "category": "한식",
-      "distance_m": 350,
-      "avg_price": 7000,
-      "current_participants": 3,
-      "delivery_fee_per_person": 1200,
-      "popular_menus": ["김치찌개", "제육볶음"]
-    }
-  ],
-  "user_preferences": {
-    "categories": ["한식"],
-    "max_price": 10000,
-    "mood_keywords": []
-  }
-}
-
-// Response (Lambda -> Spring Boot)
-{
-  "recommendations": [
-    {
-      "restaurant_name": "한솥도시락",
-      "explanation": "현재 3명이 참여 중이라 배달비가 1,200원으로 줄어요. 인기 메뉴 김치찌개가 7,000원으로 가성비가 좋습니다.",
-      "score": 0.92
-    }
-  ]
-}
-```
+- 디바이스 최초 실행 시 UUID 생성 → SecureStore 저장
+- 모든 API 요청에 `X-Device-Token` 헤더 포함
+- 백엔드가 Members 테이블에서 deviceToken으로 조회
 
 ---
 
-## 5. 배포 환경 요약
+## 5. 배포 환경
 
-| 구분 | 위치 | 구성 |
-|------|------|------|
-| 앱 서버 | 미니PC | Spring Boot 3.3 (Docker) |
-| DB | 미니PC | PostgreSQL 16 (Docker) |
-| 캐시 | 미니PC | Redis 7 (Docker) |
-| 터널링 | 미니PC | Cloudflare Tunnel (Docker) |
-| 이미지 CDN | AWS | CloudFront + S3 |
-| AI 추천 | AWS | API Gateway + Lambda |
-| 모니터링 | AWS | CloudWatch (헬스체크) |
-| 푸시 알림 | Google | FCM |
-| 지도 (식당 검색) | 클라이언트 | Kakao 지도 SDK (React Native 직접 호출, API 키는 앱에만 존재) |
-| AI 설명 | Google | Gemini Flash API |
+| 구분 | 서비스 | 비고 |
+|------|--------|------|
+| API 서버 | AWS Lambda (java17) | S3 JAR 배포 (`./scripts/build-lambda.sh`) |
+| DB | DynamoDB (ap-northeast-2) | PAY_PER_REQUEST |
+| WebSocket | Lightsail (43.201.33.167) | nginx + chat-server |
+| AI 추천 | Lambda (nodejs20.x) | Bedrock Claude 3 Haiku |
+| 이메일 인증 | AWS SES | feella001@gmail.com |
+| 푸시 알림 | FCM | |
+| 지도 | Kakao 지도 SDK | WebView, 앱 내 JS 키 |
+| 파일 저장 | S3 (food-app-assets-sj) | Lambda JAR 저장용 |
 
 ---
 
-## 6. Docker Compose 서비스 구성
+## 6. 배포 스크립트
 
-```yaml
-services:
-  app:         # Spring Boot 3.3
-  postgres:    # PostgreSQL 16
-  redis:       # Redis 7
-  tunnel:      # Cloudflare Tunnel
+```bash
+# 백엔드 Lambda 배포
+cd backend && ./scripts/build-lambda.sh
+
+# AI Lambda 배포
+cd functions/ai-recommend
+npm ci --omit=dev
+zip -r function.zip . -x "*.test.js" "*.md"
+aws s3 cp function.zip s3://food-app-assets-sj/ai-recommend/function.zip
+aws lambda update-function-code \
+  --function-name food-recommend-api \
+  --s3-bucket food-app-assets-sj \
+  --s3-key ai-recommend/function.zip \
+  --region ap-northeast-2
 ```
-
-| 서비스 | 포트 | 리소스 제한 (권장) |
-|--------|------|-------------------|
-| app | 8080 | 4GB RAM, 4 CPU |
-| postgres | 5432 | 4GB RAM, 2 CPU |
-| redis | 6379 | 1GB RAM, 1 CPU |
-| tunnel | - | 256MB RAM |
-| OS + 여유 | - | ~15GB 잔여 |
-| **합계** | | ~9GB / 24GB |

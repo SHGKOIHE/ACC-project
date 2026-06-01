@@ -1,11 +1,11 @@
 package com.foodgroup.common.config;
 
-import com.foodgroup.auth.repository.MemberRepository;
+import com.foodgroup.auth.repository.MemberPort;
+import com.foodgroup.auth.service.DeviceTokenService;
 import com.foodgroup.common.security.DeviceTokenAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -24,8 +24,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final MemberRepository memberRepository;
-    private final StringRedisTemplate redisTemplate;
+    private final MemberPort memberPort;
+    private final DeviceTokenService deviceTokenService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -50,8 +50,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of(
-            "http://localhost:8081",   // Expo web dev server
-            "http://localhost:19006"   // Expo web alternative port
+            "http://localhost:8081",
+            "http://localhost:19006"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
@@ -64,6 +64,6 @@ public class SecurityConfig {
 
     @Bean
     public DeviceTokenAuthenticationFilter deviceTokenFilter() {
-        return new DeviceTokenAuthenticationFilter(memberRepository, redisTemplate);
+        return new DeviceTokenAuthenticationFilter(deviceTokenService, memberPort);
     }
 }

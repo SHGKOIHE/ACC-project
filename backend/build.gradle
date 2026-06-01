@@ -25,28 +25,30 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
-    implementation 'org.flywaydb:flyway-core'
-    implementation 'org.flywaydb:flyway-database-postgresql'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
     implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
     implementation 'com.google.firebase:firebase-admin:9.3.0'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
-    runtimeOnly 'org.postgresql:postgresql'
+    implementation platform('software.amazon.awssdk:bom:2.25.60')
+    implementation 'software.amazon.awssdk:dynamodb-enhanced'
+    implementation 'software.amazon.awssdk:sesv2'
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:cloudwatch-metric-publisher'
+    implementation 'software.amazon.awssdk:cloudwatchlogs'
+    implementation 'software.amazon.awssdk:lambda'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    implementation 'com.amazonaws.serverless:aws-serverless-java-container-springboot3:2.0.3'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'net.jqwik:jqwik:1.9.0'
-    testImplementation 'com.h2database:h2'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
@@ -54,4 +56,54 @@ tasks.named('test') {
     useJUnitPlatform {
         includeEngines 'junit-jupiter', 'jqwik'
     }
+}
+
+task lambdaJar(type: Jar) {
+    archiveClassifier = 'lambda'
+
+    // App classes — exclude beans that depend on optional libs not included below
+    from(sourceSets.main.output) {
+        exclude 'com/foodgroup/common/config/FcmConfig.class'
+        exclude 'com/foodgroup/common/notification/FcmNotificationAdapter.class'
+        exclude 'com/foodgroup/common/config/S3Config.class'
+        exclude 'com/foodgroup/common/storage/S3Adapter.class'
+        // SES enabled — SesConfig and SesEmailSendAdapter included
+        exclude 'com/foodgroup/common/config/CloudWatchConfig.class'
+        exclude 'com/foodgroup/common/logging/CloudWatchLogAppender.class'
+    }
+
+    // Dependencies — exclude Firebase, gRPC, and disabled AWS services
+    from({
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }) {
+        // Firebase Admin SDK and everything it pulls in (gRPC, Guava, Protobuf, etc.)
+        exclude 'com/google/**'
+        exclude 'io/grpc/**'
+        exclude 'io/opencensus/**'
+        exclude 'io/envoyproxy/**'
+        exclude 'io/perfmark/**'
+        exclude 'android/**'
+        exclude 'grpc/**'
+        exclude 'xds/**'
+        exclude 'envoy/**'
+        exclude 'udpa/**'
+        exclude 'firestore/**'
+        exclude 'opencensus/**'
+        exclude 'bazel-src/**'
+        exclude 'bazel-out/**'
+        exclude 'bazel-testlogs/**'
+        exclude 'bazel-genfiles/**'
+        exclude 'bazel-bin/**'
+        exclude 'org/conscrypt/**'
+        exclude 'org/checkerframework/**'
+        exclude 'org/threeten/**'
+        // AWS SDK services disabled in Lambda
+        exclude 'software/amazon/awssdk/services/s3/**'
+        // sesv2 included for email verification
+        exclude 'software/amazon/awssdk/services/cloudwatchlogs/**'
+        exclude 'software/amazon/awssdk/services/cloudwatch/**'
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 }

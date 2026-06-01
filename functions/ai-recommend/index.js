@@ -1,7 +1,7 @@
 'use strict';
 
 const { recommend } = require('./rule_engine');
-const { generateExplanation } = require('./gemini_client');
+const { generateExplanation } = require('./bedrock_client');
 
 const INTERNAL_KEY_HEADER = 'x-internal-key';
 
@@ -42,7 +42,7 @@ exports.handler = async (event) => {
   // 규칙 엔진 점수 계산
   const recommendations = recommend(participants, filters);
 
-  // Gemini 자연어 설명 (실패해도 recommendations는 반환)
+  // Bedrock 자연어 설명 (실패해도 recommendations는 반환)
   const explanation = await generateExplanation(recommendations, participants);
 
   return {

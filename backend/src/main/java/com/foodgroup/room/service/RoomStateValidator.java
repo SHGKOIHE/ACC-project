@@ -10,7 +10,8 @@ public class RoomStateValidator {
         return switch (from) {
             case OPEN      -> to == RoomStatus.CLOSED || to == RoomStatus.CANCELLED;
             case CLOSED    -> to == RoomStatus.CONFIRMED || to == RoomStatus.CANCELLED;
-            case CONFIRMED -> to == RoomStatus.COMPLETED || to == RoomStatus.CANCELLED;
+            case CONFIRMED -> to == RoomStatus.DELIVERING || to == RoomStatus.CANCELLED;
+            case DELIVERING -> to == RoomStatus.COMPLETED;
             case COMPLETED, CANCELLED -> false;
         };
     }

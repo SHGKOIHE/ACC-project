@@ -1,39 +1,34 @@
 package com.foodgroup.auth.domain;
 
-import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "members")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder
 @AllArgsConstructor
 public class Member {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, unique = true, length = 12)
+    private String id;
     private String nickname;
-
-    @Column(nullable = false, unique = true)
     private String deviceToken;
-
-    @Column(length = 255)
     private String fcmToken;
-
-    @Column(nullable = false, updatable = false)
+    private Gender gender;
+    private String address;
+    private String email;
+    private boolean emailVerified;
     private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-    }
 
     public void updateFcmToken(String fcmToken) {
         this.fcmToken = fcmToken;
+    }
+
+    public void updateProfile(Gender gender, String address) {
+        this.gender = gender;
+        this.address = address;
+    }
+
+    public void verifyEmail(String email) {
+        this.email = email;
+        this.emailVerified = true;
     }
 }

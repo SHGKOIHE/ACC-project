@@ -17,7 +17,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 interface Props {
   room: {
-    id: number;
+    id: string;
     title: string;
     meetingType: string;
     restaurantName: string;

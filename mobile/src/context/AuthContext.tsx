@@ -1,24 +1,29 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as Crypto from 'expo-crypto';
+import * as Notifications from 'expo-notifications';
 import { apiClient } from '../api/client';
-import { getItem, setItem } from '../utils/storage';
+import { getItem, setItem, removeItem } from '../utils/storage';
 
 interface AuthState {
   deviceToken: string | null;
-  memberId: number | null;
+  memberId: string | null;
   nickname: string | null;
   isLoading: boolean;
+  isNewUser: boolean;
   register: (nickname: string) => Promise<void>;
   updateFcmToken: (fcmToken: string) => Promise<void>;
+  completeOnboarding: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [deviceToken, setDeviceToken] = useState<string | null>(null);
-  const [memberId, setMemberId] = useState<number | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
     initDeviceToken();
@@ -26,23 +31,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function initDeviceToken() {
     try {
-      let token = await getItem('deviceToken');
+      let token: string | null = await getItem('deviceToken');
       if (!token) {
         token = await Crypto.randomUUID();
         await setItem('deviceToken', token);
       }
+      let activeToken = token;
       setDeviceToken(token);
 
       const stored = await getItem('memberInfo');
       if (stored) {
-        const info = JSON.parse(stored);
-        // DB에 해당 회원이 실제로 존재하는지 확인
-        const valid = await verifyMember(token);
-        if (valid) {
-          setMemberId(info.id);
-          setNickname(info.nickname);
+        const raw = JSON.parse(stored);
+        // 이전 버전에서 {success, data:{id,...}} 형태로 저장된 경우 복구
+        const info = raw.data ?? raw;
+        if (info?.id) {
+          if (info.deviceToken && info.deviceToken !== token) {
+            activeToken = info.deviceToken;
+            await setItem('deviceToken', activeToken);
+            setDeviceToken(activeToken);
+          }
+          const valid = await verifyMember(activeToken);
+          if (valid) {
+            setMemberId(info.id);
+            setNickname(info.nickname);
+            // 깨진 형식이면 올바른 형식으로 재저장
+            if (raw.data) await setItem('memberInfo', JSON.stringify(info));
+            await registerPushToken();
+          } else {
+            await removeItem('memberInfo');
+          }
         } else {
-          await setItem('memberInfo', '');
+          await removeItem('memberInfo');
         }
       }
     } finally {
@@ -62,16 +81,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function registerPushToken() {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      try {
+        await apiClient.put('/api/auth/fcm-token', { fcmToken: token });
+      } catch {
+        // silent
+      }
+    } catch {
+      // silent - permissions or token fetch failed
+    }
+  }
+
   async function register(nick: string) {
     try {
       const res: any = await apiClient.post('/api/auth/register', {
         nickname: nick,
-        deviceToken,
       });
       const member = res.data;
+      if (member.deviceToken) {
+        await setItem('deviceToken', member.deviceToken);
+        setDeviceToken(member.deviceToken);
+      }
       setMemberId(member.id);
       setNickname(member.nickname);
+      setIsNewUser(true);
       await setItem('memberInfo', JSON.stringify(member));
+      await registerPushToken();
     } catch (e) {
       setMemberId(null);
       setNickname(null);
@@ -83,8 +122,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await apiClient.put('/api/auth/fcm-token', { fcmToken });
   }
 
+  function completeOnboarding() {
+    setIsNewUser(false);
+  }
+
+  async function logout() {
+    await removeItem('memberInfo');
+    setMemberId(null);
+    setNickname(null);
+    setIsNewUser(false);
+    // deviceToken is a stable device identifier — keep it so register() works after logout
+  }
+
   return (
-    <AuthContext.Provider value={{ deviceToken, memberId, nickname, isLoading, register, updateFcmToken }}>
+    <AuthContext.Provider value={{ deviceToken, memberId, nickname, isLoading, isNewUser, register, updateFcmToken, completeOnboarding, logout }}>
       {children}
     </AuthContext.Provider>
   );

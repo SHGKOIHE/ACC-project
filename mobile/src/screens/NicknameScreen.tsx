@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { showAlert } from '../utils/alert';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 export function NicknameScreen() {
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   async function handleRegister() {
     const trimmed = nickname.trim();
@@ -17,6 +21,7 @@ export function NicknameScreen() {
     setLoading(true);
     try {
       await register(trimmed);
+      navigation.replace('Gender');
     } catch (e: any) {
       showAlert('오류', e?.message ?? '등록에 실패했습니다.');
     } finally {
