@@ -13,4 +13,5 @@ public interface RoomPort {
     List<Room> scanByStatus(RoomStatus status);
     List<Room> findOpenClosingBetween(LocalDateTime from, LocalDateTime to);
     int closeExpiredRooms(LocalDateTime now);
+    void delete(String roomId);
 }

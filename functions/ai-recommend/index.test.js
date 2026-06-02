@@ -3,18 +3,28 @@
 const { handler } = require('./index');
 const { calculateScore, detectCategory } = require('./rule_engine');
 
-// Bedrock 항상 빈 문자열 반환으로 mocking
+const { generateRecommendations } = require('./bedrock_client');
+
 jest.mock('./bedrock_client', () => ({
-  generateExplanation: jest.fn().mockResolvedValue(''),
+  generateRecommendations: jest.fn(),
 }));
 
 const VALID_KEY = 'test-secret';
 
 beforeEach(() => {
   process.env.INTERNAL_SECRET_KEY = VALID_KEY;
+  generateRecommendations.mockResolvedValue({
+    recommendations: [
+      { rank: 1, restaurantName: 'AI 치킨집', score: 92, reason: '치킨 선호가 높습니다.' },
+      { rank: 2, restaurantName: 'AI 피자집', score: 81, reason: '피자 주문도 있어 함께 먹기 좋습니다.' },
+      { rank: 3, restaurantName: 'AI 중식집', score: 70, reason: '단체 주문에 적합합니다.' },
+    ],
+    explanation: 'AI가 주문 선호를 기준으로 추천했습니다.',
+  });
 });
 
 afterEach(() => {
+  jest.clearAllMocks();
   process.env.INTERNAL_SECRET_KEY = VALID_KEY;
 });
 
@@ -63,9 +73,30 @@ test('정상 요청 시 recommendations 배열 포함 응답', async () => {
   expect(Array.isArray(parsed.recommendations)).toBe(true);
   expect(parsed.recommendations.length).toBe(3);
   expect(parsed.recommendations[0]).toHaveProperty('rank', 1);
+  expect(parsed.recommendations[0]).toHaveProperty('restaurantName', 'AI 치킨집');
+  expect(parsed.recommendations[0]).toHaveProperty('score', 92);
+  expect(parsed.explanation).toBe('AI가 주문 선호를 기준으로 추천했습니다.');
+  expect(generateRecommendations).toHaveBeenCalledWith(
+    expect.any(Array),
+    {}
+  );
+});
+
+test('Bedrock 추천 실패 시 규칙 엔진 결과로 폴백', async () => {
+  generateRecommendations.mockRejectedValueOnce(new Error('bedrock down'));
+  const event = makeEvent({
+    roomId: 1,
+    participants: [{ nickname: '짱구', orderItems: [{ name: '치킨', price: 15000 }] }],
+    filters: { category: '치킨' },
+  });
+
+  const result = await handler(event);
+  expect(result.statusCode).toBe(200);
+
+  const parsed = JSON.parse(result.body);
+  expect(parsed.fallback).toBe(true);
+  expect(parsed.recommendations).toHaveLength(3);
   expect(parsed.recommendations[0]).toHaveProperty('restaurantName');
-  expect(parsed.recommendations[0]).toHaveProperty('score');
-  expect(typeof parsed.explanation).toBe('string');
 });
 
 test('participants 없어도 200 응답', async () => {

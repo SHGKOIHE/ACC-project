@@ -28,6 +28,8 @@ public class ChatService {
     private final SimpMessagingTemplate messagingTemplate;
 
     public ChatMessageResponse saveAndBroadcast(String roomId, String memberId, ChatMessageType type, String content) {
+        validateMessage(roomId, memberId, type, content);
+
         ChatMessage saved = chatMessagePort.save(roomId, memberId, type, content);
 
         String nickname = memberId != null
@@ -37,6 +39,18 @@ public class ChatService {
         ChatMessageResponse response = ChatMessageResponse.of(saved, nickname);
         messagingTemplate.convertAndSend("/topic/room/" + roomId, response);
         return response;
+    }
+
+    private void validateMessage(String roomId, String memberId, ChatMessageType type, String content) {
+        if (type == null || content == null || content.isBlank() || content.length() > 1000) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (memberId != null && !roomParticipantPort.existsByRoomIdAndMemberId(roomId, memberId)) {
+            throw new BusinessException(ErrorCode.NOT_ROOM_PARTICIPANT);
+        }
+        if (memberId == null && type != ChatMessageType.NOTICE) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
     }
 
     public List<ChatMessageResponse> getHistory(String roomId, String memberId) {

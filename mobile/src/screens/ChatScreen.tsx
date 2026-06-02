@@ -33,6 +33,7 @@ export function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [connected, setConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
   const listRef = useRef<FlatList>(null);
 
@@ -51,38 +52,64 @@ export function ChatScreen() {
 
     async function connect() {
       const token = await getItem('deviceToken');
+      const brokerURL = `${WS_URL}/ws-native`;
+      console.warn('[ChatScreen] STOMP connecting', {
+        brokerURL,
+        roomId,
+        hasToken: Boolean(token),
+        tokenLength: token?.length ?? 0,
+      });
       const client = new Client({
-        brokerURL: `${WS_URL}/ws-native`,
+        brokerURL,
+        webSocketFactory: () => new WebSocket(brokerURL),
         connectHeaders: { 'X-Device-Token': token ?? '' },
         reconnectDelay: 2000,
+        connectionTimeout: 5000,
         heartbeatIncoming: 0,
         heartbeatOutgoing: 0,
+        debug: (message) => console.warn('[ChatScreen] STOMP debug', message),
         onConnect: () => {
           if (!mounted) return;
+          console.warn('[ChatScreen] STOMP connected', { roomId });
           setConnected(true);
+          setConnectionError(null);
           client.subscribe(`/topic/room/${roomId}`, (frame) => {
             if (!mounted) return;
+            console.warn('[ChatScreen] STOMP message', { roomId, bytes: frame.body?.length ?? 0 });
             const msg: ChatMessage = JSON.parse(frame.body);
             setMessages((prev) => [...prev, msg]);
           });
         },
         onDisconnect: () => {
           if (!mounted) return;
+          console.warn('[ChatScreen] STOMP disconnected', { roomId });
           setConnected(false);
         },
         onStompError: (frame) => {
           if (!mounted) return;
+          const message = frame.headers?.message ?? '연결에 실패했습니다.';
+          console.warn('[ChatScreen] STOMP error', { headers: frame.headers, body: frame.body });
           setConnected(false);
-          showAlert('채팅 오류', frame.headers?.message ?? '연결에 실패했습니다.');
+          setConnectionError(message);
+          showAlert('채팅 오류', message);
         },
-        onWebSocketError: () => {
+        onWebSocketError: (event) => {
           if (!mounted) return;
+          const message = '서버에 연결할 수 없습니다.';
+          console.warn('[ChatScreen] WebSocket error', event);
           setConnected(false);
-          showAlert('채팅 오류', '서버에 연결할 수 없습니다.');
+          setConnectionError(message);
+          showAlert('채팅 오류', message);
         },
-        onWebSocketClose: () => {
+        onWebSocketClose: (event) => {
           if (!mounted) return;
+          console.warn('[ChatScreen] WebSocket close', {
+            code: event?.code,
+            reason: event?.reason,
+            wasClean: event?.wasClean,
+          });
           setConnected(false);
+          setConnectionError('채팅 서버 응답이 없습니다. 잠시 후 다시 시도해주세요.');
         },
       });
       client.activate();
@@ -127,7 +154,7 @@ export function ChatScreen() {
       />
       {!connected && (
         <View style={styles.disconnectedBanner}>
-          <Text style={styles.disconnectedText}>채팅 서버에 연결 중...</Text>
+          <Text style={styles.disconnectedText}>{connectionError ?? '채팅 서버에 연결 중...'}</Text>
         </View>
       )}
       <View style={[styles.inputRow, { paddingBottom: insets.bottom + 4 }]}>

@@ -7,6 +7,7 @@ import com.foodgroup.order.repository.OrderItemPort;
 import com.foodgroup.room.domain.MeetingType;
 import com.foodgroup.room.domain.Room;
 import com.foodgroup.room.domain.RoomStatus;
+import com.foodgroup.room.domain.RoomParticipant;
 import com.foodgroup.room.repository.RoomParticipantPort;
 import com.foodgroup.room.repository.RoomPort;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -70,11 +72,41 @@ class RoomServiceTest {
     void leaveRoom_방장_탈퇴_예외() {
         Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 2);
         given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+        given(roomParticipantPort.findByRoomId("room-1")).willReturn(List.of(
+                participant("host-1"),
+                participant("member-2")
+        ));
 
         assertThatThrownBy(() -> roomService.leaveRoom("room-1", "host-1"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.HOST_CANNOT_LEAVE);
+    }
+
+    @Test
+    void leaveRoom_방장_혼자면_참여자수_캐시가_커도_방삭제() {
+        Room room = buildRoom(RoomStatus.OPEN, "host-1", 3, 2);
+        RoomParticipant host = participant("host-1");
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+        given(roomParticipantPort.findByRoomId("room-1")).willReturn(List.of(host));
+        given(roomParticipantPort.findByRoomIdAndMemberId("room-1", "host-1")).willReturn(Optional.of(host));
+
+        roomService.leaveRoom("room-1", "host-1");
+
+        then(roomParticipantPort).should().delete(host);
+        then(orderItemPort).should().deleteByRoomIdAndMemberId("room-1", "host-1");
+        then(roomPort).should().delete("room-1");
+    }
+
+    @Test
+    void leaveRoom_방장_혼자여도_확정후에는_방삭제_불가() {
+        Room room = buildRoom(RoomStatus.CONFIRMED, "host-1", 3, 1);
+        given(roomPort.findById("room-1")).willReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.leaveRoom("room-1", "host-1"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_STATUS_INVALID);
     }
 
     @Test
@@ -120,6 +152,14 @@ class RoomServiceTest {
         roomService.closeRoom("room-1", "host-1");
 
         assertThat(room.getStatus()).isEqualTo(RoomStatus.CLOSED);
+    }
+
+    private RoomParticipant participant(String memberId) {
+        return RoomParticipant.builder()
+                .id("participant-" + memberId)
+                .roomId("room-1")
+                .memberId(memberId)
+                .build();
     }
 
     private Room buildRoom(RoomStatus status, String hostId, int max, int current) {

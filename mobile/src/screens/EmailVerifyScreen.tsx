@@ -50,6 +50,11 @@ export function EmailVerifyScreen() {
     }
   }
 
+  function handleSkip() {
+    completeOnboarding();
+    navigation.replace('Main');
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>이메일 인증</Text>
@@ -73,6 +78,9 @@ export function EmailVerifyScreen() {
           >
             <Text style={styles.buttonText}>{loading ? '전송 중...' : '인증코드 전송'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+            <Text style={styles.skipText}>나중에 하기</Text>
+          </TouchableOpacity>
         </>
       ) : (
         <>
@@ -92,6 +100,9 @@ export function EmailVerifyScreen() {
             disabled={loading}
           >
             <Text style={styles.buttonText}>{loading ? '인증 중...' : '인증 완료'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+            <Text style={styles.skipText}>나중에 하기</Text>
           </TouchableOpacity>
         </>
       )}
@@ -117,4 +128,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#FF6B35', borderRadius: 10, padding: 16, alignItems: 'center', marginBottom: 12 },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  skipBtn: { alignItems: 'center', marginTop: 8 },
+  skipText: { color: '#aaa', fontSize: 14, textAlign: 'center' },
 });

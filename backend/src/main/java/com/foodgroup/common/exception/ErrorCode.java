@@ -23,7 +23,7 @@ public enum ErrorCode {
     ROOM_STATUS_INVALID("ROOM_STATUS_INVALID", HttpStatus.CONFLICT, "유효하지 않은 방 상태 전이입니다"),
     ALREADY_JOINED("ALREADY_JOINED", HttpStatus.CONFLICT, "이미 참여한 방입니다"),
     NOT_ROOM_HOST("NOT_ROOM_HOST", HttpStatus.FORBIDDEN, "방장만 가능한 작업입니다"),
-    HOST_CANNOT_LEAVE("HOST_CANNOT_LEAVE", HttpStatus.BAD_REQUEST, "방장은 탈퇴할 수 없습니다. 방 취소를 이용하세요"),
+    HOST_CANNOT_LEAVE("HOST_CANNOT_LEAVE", HttpStatus.BAD_REQUEST, "다른 참여자가 있어 방장은 나갈 수 없습니다"),
     NOT_ROOM_PARTICIPANT("NOT_ROOM_PARTICIPANT", HttpStatus.FORBIDDEN, "방 참여자가 아닙니다"),
     ROOM_NOT_CLOSEABLE("ROOM_NOT_CLOSEABLE", HttpStatus.CONFLICT, "마감할 수 없는 상태입니다"),
     ROOM_COMPLETED("ROOM_COMPLETED", HttpStatus.CONFLICT, "완료된 방은 취소할 수 없습니다"),

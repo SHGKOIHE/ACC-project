@@ -37,6 +37,7 @@ class ChatServiceTest {
                 .roomId("room-1").memberId("member-10").type(ChatMessageType.TALK).content("hello").build();
         Member member = Member.builder().id("member-10").nickname("짱구").deviceToken("token").build();
 
+        given(roomParticipantPort.existsByRoomIdAndMemberId("room-1", "member-10")).willReturn(true);
         given(chatMessagePort.save("room-1", "member-10", ChatMessageType.TALK, "hello")).willReturn(saved);
         given(memberPort.findById("member-10")).willReturn(Optional.of(member));
 
@@ -58,6 +59,32 @@ class ChatServiceTest {
 
         assertThat(response.nickname()).isNull();
         verify(memberPort, never()).findById(any());
+    }
+
+
+    @Test
+    void saveAndBroadcast_rejects_non_participant_publish() {
+        given(roomParticipantPort.existsByRoomIdAndMemberId("room-1", "member-99")).willReturn(false);
+
+        assertThatThrownBy(() -> chatService.saveAndBroadcast("room-1", "member-99", ChatMessageType.TALK, "hello"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(com.foodgroup.common.exception.ErrorCode.NOT_ROOM_PARTICIPANT);
+        verify(chatMessagePort, never()).save(any(), any(), any(), any());
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+    }
+
+    @Test
+    void saveAndBroadcast_rejects_blank_or_oversized_content() {
+        assertThatThrownBy(() -> chatService.saveAndBroadcast("room-1", "member-10", ChatMessageType.TALK, " "))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(com.foodgroup.common.exception.ErrorCode.INVALID_INPUT);
+        assertThatThrownBy(() -> chatService.saveAndBroadcast("room-1", "member-10", ChatMessageType.TALK, "x".repeat(1001)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(com.foodgroup.common.exception.ErrorCode.INVALID_INPUT);
+        verify(chatMessagePort, never()).save(any(), any(), any(), any());
     }
 
     @Test
@@ -97,6 +124,7 @@ class ChatServiceTest {
                 .roomId("room-42").memberId("member-5").type(ChatMessageType.ENTER).content("입장").build();
         Member member = Member.builder().id("member-5").nickname("철수").deviceToken("t").build();
 
+        given(roomParticipantPort.existsByRoomIdAndMemberId("room-42", "member-5")).willReturn(true);
         given(chatMessagePort.save("room-42", "member-5", ChatMessageType.ENTER, "입장")).willReturn(saved);
         given(memberPort.findById("member-5")).willReturn(Optional.of(member));
 

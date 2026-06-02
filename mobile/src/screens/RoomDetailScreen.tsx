@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { showAlert } from '../utils/alert';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
@@ -13,6 +13,8 @@ type RouteParams = RouteProp<RootStackParamList, 'RoomDetail'>;
 const STATUS_LABEL: Record<string, string> = {
   OPEN: '모집 중', CLOSED: '마감', CONFIRMED: '확정', DELIVERING: '배달 중', COMPLETED: '완료', CANCELLED: '취소',
 };
+
+const ROOM_LIVE_REFETCH_INTERVAL_MS = 3000;
 
 export function RoomDetailScreen() {
   const route = useRoute<RouteParams>();
@@ -28,16 +30,25 @@ export function RoomDetailScreen() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['room', roomId],
     queryFn: () => apiClient.get(`/api/rooms/${roomId}`),
+    refetchInterval: ROOM_LIVE_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnMount: 'always',
   });
 
   const { data: ordersData, refetch: refetchOrders } = useQuery({
     queryKey: ['orders', roomId],
     queryFn: () => apiClient.get(`/api/rooms/${roomId}/orders`),
+    refetchInterval: ROOM_LIVE_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnMount: 'always',
   });
 
-  const { data: participantsData } = useQuery({
+  const { data: participantsData, refetch: refetchParticipants } = useQuery({
     queryKey: ['participants', roomId],
     queryFn: () => apiClient.get(`/api/rooms/${roomId}/participants`),
+    refetchInterval: ROOM_LIVE_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnMount: 'always',
   });
 
   const room: any = (data as any)?.data;
@@ -49,6 +60,14 @@ export function RoomDetailScreen() {
     participants.map((p: any) => [p.memberId, p.nickname])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+      refetchOrders();
+      refetchParticipants();
+    }, [refetch, refetchOrders, refetchParticipants])
+  );
+
   useEffect(() => {
     if (!room) return;
     if (room.status !== 'OPEN' && !isParticipant && !isHost) {
@@ -56,61 +75,6 @@ export function RoomDetailScreen() {
       navigation.goBack();
     }
   }, [room?.status, isParticipant, isHost]);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!room || room.status !== 'OPEN') return;
-      e.preventDefault();
-      if (isHost) {
-        Alert.alert(
-          '방 나가기',
-          '방을 나가면 방이 취소됩니다. 나가시겠습니까?',
-          [
-            { text: '취소', style: 'cancel' },
-            {
-              text: '나가기',
-              style: 'destructive',
-              onPress: async () => {
-                try {
-                  await apiClient.post(`/api/rooms/${roomId}/cancel`);
-                  qc.invalidateQueries({ queryKey: ['rooms'] });
-                  navigation.dispatch(e.data.action);
-                } catch (err: any) {
-                  showAlert('오류', (err as any)?.message ?? '방 취소에 실패했습니다.');
-                }
-              },
-            },
-          ]
-        );
-      } else if (isParticipant) {
-        Alert.alert(
-          '방 나가기',
-          '방을 나가면 추가한 메뉴가 삭제됩니다. 나가시겠습니까?',
-          [
-            { text: '취소', style: 'cancel' },
-            {
-              text: '나가기',
-              style: 'destructive',
-              onPress: async () => {
-                try {
-                  await apiClient.post(`/api/rooms/${roomId}/leave`);
-                  qc.invalidateQueries({ queryKey: ['room', roomId] });
-                  qc.invalidateQueries({ queryKey: ['participants', roomId] });
-                  qc.invalidateQueries({ queryKey: ['orders', roomId] });
-                  navigation.dispatch(e.data.action);
-                } catch (err: any) {
-                  showAlert('오류', (err as any)?.message ?? '방 나가기에 실패했습니다.');
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        navigation.dispatch(e.data.action);
-      }
-    });
-    return unsubscribe;
-  }, [navigation, isHost, isParticipant, roomId, room?.status]);
 
   function mutate(fn: () => Promise<any>, extraInvalidations?: string[][]) {
     return fn().then(() => {
@@ -120,6 +84,30 @@ export function RoomDetailScreen() {
       extraInvalidations?.forEach((key) => qc.invalidateQueries({ queryKey: key }));
       refetch();
     }).catch((e: any) => showAlert('오류', e?.message ?? '요청 실패'));
+  }
+
+  async function leaveRoom() {
+    try {
+      await apiClient.post(`/api/rooms/${roomId}/leave`);
+      qc.invalidateQueries({ queryKey: ['room', roomId] });
+      qc.invalidateQueries({ queryKey: ['participants', roomId] });
+      qc.invalidateQueries({ queryKey: ['orders', roomId] });
+      qc.invalidateQueries({ queryKey: ['rooms'] });
+      navigation.goBack();
+    } catch (e: any) {
+      showAlert('오류', e?.message ?? '방 나가기에 실패했습니다.');
+    }
+  }
+
+  function confirmLeaveRoom() {
+    Alert.alert(
+      '방 나가기',
+      '방을 나가면 추가한 메뉴가 삭제됩니다. 나가시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '나가기', style: 'destructive', onPress: leaveRoom },
+      ]
+    );
   }
 
   const addMenuMutation = useMutation({
@@ -137,7 +125,8 @@ export function RoomDetailScreen() {
   const aiRecommendMutation = useMutation({
     mutationFn: () => apiClient.post(`/api/rooms/${roomId}/recommend`),
     onSuccess: (res: any) => {
-      const top = res?.recommendations?.[0];
+      const recommendData = res?.data ?? res;
+      const top = recommendData?.recommendations?.[0];
       if (top) {
         setAiResult({ restaurantName: top.restaurantName, reason: top.reason });
         setAiModalVisible(true);
@@ -209,7 +198,7 @@ export function RoomDetailScreen() {
       )}
 
       <View style={styles.actions}>
-        {isHost && (room.status === 'OPEN' || room.status === 'CLOSED') && (
+        {isHost && room.status === 'CONFIRMED' && (
           <TouchableOpacity
             style={[styles.button, styles.dangerButton]}
             onPress={() => {
@@ -234,13 +223,28 @@ export function RoomDetailScreen() {
             <Text style={styles.buttonText}>방 취소 (나가기)</Text>
           </TouchableOpacity>
         )}
+        {room.status === 'OPEN' && isHost && participants.length <= 1 && (
+          <TouchableOpacity
+            style={styles.leaveButton}
+            onPress={() => Alert.alert(
+              '방 나가기',
+              '방에 혼자 있습니다. 나가면 방이 취소됩니다. 나가시겠습니까?',
+              [
+                { text: '취소', style: 'cancel' },
+                { text: '나가기', style: 'destructive', onPress: leaveRoom },
+              ]
+            )}
+          >
+            <Text style={styles.leaveButtonText}>나가기</Text>
+          </TouchableOpacity>
+        )}
         {room.status === 'OPEN' && !isHost && !isParticipant && (
           <TouchableOpacity style={styles.button} onPress={() => mutate(() => apiClient.post(`/api/rooms/${roomId}/join`))}>
             <Text style={styles.buttonText}>참여하기</Text>
           </TouchableOpacity>
         )}
         {room.status === 'OPEN' && !isHost && isParticipant && (
-          <TouchableOpacity style={styles.leaveButton} onPress={() => mutate(() => apiClient.post(`/api/rooms/${roomId}/leave`))}>
+          <TouchableOpacity style={styles.leaveButton} onPress={confirmLeaveRoom}>
             <Text style={styles.leaveButtonText}>나가기</Text>
           </TouchableOpacity>
         )}

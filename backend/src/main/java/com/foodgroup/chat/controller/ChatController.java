@@ -3,6 +3,7 @@ package com.foodgroup.chat.controller;
 import com.foodgroup.chat.dto.ChatMessageRequest;
 import com.foodgroup.chat.dto.ChatMessageResponse;
 import com.foodgroup.chat.service.ChatService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -17,7 +18,7 @@ public class ChatController {
 
     @MessageMapping("/room/{roomId}/chat")
     public void handleChat(@DestinationVariable String roomId,
-                           ChatMessageRequest request,
+                           @Valid ChatMessageRequest request,
                            SimpMessageHeaderAccessor headerAccessor) {
         String memberId = (String) headerAccessor.getSessionAttributes().get("memberId");
         chatService.saveAndBroadcast(roomId, memberId, request.type(), request.content());

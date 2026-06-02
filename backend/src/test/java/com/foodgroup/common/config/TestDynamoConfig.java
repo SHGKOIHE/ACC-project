@@ -69,6 +69,7 @@ public class TestDynamoConfig {
                 expired.forEach(r -> { r.updateStatus(RoomStatus.CLOSED); store.put(r.getId(), r); });
                 return expired.size();
             }
+            @Override public void delete(String roomId) { store.remove(roomId); }
         };
     }
 

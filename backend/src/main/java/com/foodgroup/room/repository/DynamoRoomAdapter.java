@@ -67,6 +67,11 @@ public class DynamoRoomAdapter implements RoomPort {
     }
 
     @Override
+    public void delete(String roomId) {
+        table().deleteItem(Key.builder().partitionValue(roomId).build());
+    }
+
+    @Override
     public int closeExpiredRooms(LocalDateTime now) {
         Expression filter = Expression.builder()
                 .expression("#s = :open AND closedAt <= :now")

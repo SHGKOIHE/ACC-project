@@ -1,7 +1,7 @@
 'use strict';
 
 const { recommend } = require('./rule_engine');
-const { generateExplanation } = require('./bedrock_client');
+const { generateRecommendations } = require('./bedrock_client');
 
 const INTERNAL_KEY_HEADER = 'x-internal-key';
 
@@ -39,15 +39,24 @@ exports.handler = async (event) => {
 
   const { participants = [], filters = {} } = body;
 
-  // 규칙 엔진 점수 계산
-  const recommendations = recommend(participants, filters);
-
-  // Bedrock 자연어 설명 (실패해도 recommendations는 반환)
-  const explanation = await generateExplanation(recommendations, participants);
-
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recommendations, explanation }),
-  };
+  try {
+    const aiResult = await generateRecommendations(participants, filters);
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(aiResult),
+    };
+  } catch (e) {
+    console.warn('Bedrock recommendation failed, falling back to rule engine:', e.message);
+    const recommendations = recommend(participants, filters);
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recommendations,
+        explanation: '',
+        fallback: true,
+      }),
+    };
+  }
 };

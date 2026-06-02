@@ -98,8 +98,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function register(nick: string) {
     try {
+      const activeDeviceToken = deviceToken ?? await getItem('deviceToken');
       const res: any = await apiClient.post('/api/auth/register', {
         nickname: nick,
+        deviceToken: activeDeviceToken,
       });
       const member = res.data;
       if (member.deviceToken) {

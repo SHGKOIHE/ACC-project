@@ -23,7 +23,7 @@ export DEPLOY_BUCKET=food-app-assets-sj
 export INTERNAL_SECRET_KEY=<백엔드 AI_LAMBDA_INTERNAL_KEY와 동일한 값>
 ```
 
-> **AI 엔진**: Bedrock (`anthropic.claude-3-haiku-20240307-v1:0`, 리전 `ap-northeast-2`).
+> **AI 엔진**: Bedrock (`anthropic.claude-3-haiku-20240307-v1:0`, 리전 `ap-northeast-2`)이 추천 결과 JSON과 설명을 직접 생성합니다. Bedrock 호출 실패 시 Lambda는 기존 규칙 엔진 결과로 폴백합니다.
 > API 키 불필요 — Lambda 실행 Role의 IAM 권한으로 접근.
 
 ---
@@ -69,7 +69,7 @@ aws lambda update-function-configuration \
 
 ### 5. Lambda 실행 Role에 Bedrock 권한 부여
 
-`food-recommend-api`가 Bedrock을 호출하려면 실행 Role에 권한이 필요:
+`food-recommend-api`가 추천 생성을 위해 Bedrock을 호출하려면 실행 Role에 권한이 필요:
 
 ```bash
 aws iam put-role-policy \

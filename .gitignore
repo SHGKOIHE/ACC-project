@@ -35,3 +35,12 @@ mobile/ios/Pods/
 # Build artifacts
 nohup.out
 functions/ai-recommend/function.zip
+
+# AI tool files
+CLAUDE.md
+AGENT.md
+.claudeignore
+.aidlc-rule-details/
+aidlc-docs/
+.omc/
+reports/

@@ -45,7 +45,7 @@ module.exports = {
     ],
     extra: {
       apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
-      eas: { projectId: process.env.EAS_PROJECT_ID },
+      eas: { projectId: process.env.EAS_PROJECT_ID ?? 'bf62240d-7fb1-463c-b4cc-438a5694213e' },
     },
   },
 };

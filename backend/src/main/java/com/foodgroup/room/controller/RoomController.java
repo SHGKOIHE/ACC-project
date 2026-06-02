@@ -137,7 +137,8 @@ public class RoomController {
             Integer maxParticipants, Integer currentParticipantCount,
             String status, LocalDateTime closedAt, String meetingAddress,
             String accountHolder, String bankName, LocalDateTime createdAt,
-            boolean isParticipant, boolean isHost
+            @com.fasterxml.jackson.annotation.JsonProperty("isParticipant") boolean isParticipant,
+            @com.fasterxml.jackson.annotation.JsonProperty("isHost") boolean isHost
     ) {
         public static RoomResponse from(Room r, boolean isParticipant, boolean isHost) {
             return new RoomResponse(

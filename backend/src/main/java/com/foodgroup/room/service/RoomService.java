@@ -111,11 +111,20 @@ public class RoomService {
 
     public void leaveRoom(String roomId, String memberId) {
         Room room = findRoomOrThrow(roomId);
-        if (room.getHostId().equals(memberId)) {
-            throw new BusinessException(ErrorCode.HOST_CANNOT_LEAVE);
-        }
         if (room.getStatus() != RoomStatus.OPEN) {
             throw new BusinessException(ErrorCode.ROOM_STATUS_INVALID);
+        }
+        if (room.getHostId().equals(memberId)) {
+            boolean hasOtherParticipants = roomParticipantPort.findByRoomId(roomId).stream()
+                    .anyMatch(participant -> !participant.getMemberId().equals(memberId));
+            if (hasOtherParticipants) {
+                throw new BusinessException(ErrorCode.HOST_CANNOT_LEAVE);
+            }
+            roomParticipantPort.findByRoomIdAndMemberId(roomId, memberId)
+                    .ifPresent(roomParticipantPort::delete);
+            orderItemPort.deleteByRoomIdAndMemberId(roomId, memberId);
+            roomPort.delete(roomId);
+            return;
         }
         RoomParticipant participant = roomParticipantPort
                 .findByRoomIdAndMemberId(roomId, memberId)
