@@ -28,8 +28,7 @@ import { uuidv4 } from './auth.js';
 // ── 사전 설정: 토큰 등록 + 방 생성 ──────────────────────────
 export function setup() {
   const tokens = [];
-  // 50개 토큰만 등록 — 200 VUs는 __VU % 50 으로 순환
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 200; i++) {
     const token = uuidv4();
     const res = http.post(
       `${BASE_URL}/api/auth/register`,
