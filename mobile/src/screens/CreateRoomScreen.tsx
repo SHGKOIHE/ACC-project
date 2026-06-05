@@ -16,6 +16,11 @@ const MEETING_TYPES: { label: string; value: MeetingType }[] = [
   { label: '같이 먹기', value: 'DINE_OUT' },
 ];
 
+const DEFAULT_ROOM_COORDS = {
+  latitude: Number(process.env.EXPO_PUBLIC_DEFAULT_MAP_LAT ?? 37.24240),
+  longitude: Number(process.env.EXPO_PUBLIC_DEFAULT_MAP_LNG ?? 127.08133),
+};
+
 export function CreateRoomScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const qc = useQueryClient();
@@ -56,8 +61,8 @@ export function CreateRoomScreen() {
     }
     mutation.mutate({
       ...form,
-      latitude: parseFloat(form.latitude) || 37.5,
-      longitude: parseFloat(form.longitude) || 127.0,
+      latitude: parseFloat(form.latitude) || DEFAULT_ROOM_COORDS.latitude,
+      longitude: parseFloat(form.longitude) || DEFAULT_ROOM_COORDS.longitude,
       deliveryFee: parseInt(form.deliveryFee, 10) || 0,
       maxParticipants: parseInt(form.maxParticipants, 10) || 4,
     });

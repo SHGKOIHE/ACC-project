@@ -8,7 +8,9 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://40ocxlcwfl.execute-api.ap-northeast-2.amazonaws.com",
-        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167"
+        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167",
+        "EXPO_PUBLIC_DEFAULT_MAP_LAT": "37.24240",
+        "EXPO_PUBLIC_DEFAULT_MAP_LNG": "127.08133"
       }
     },
     "preview": {
@@ -18,14 +20,18 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://40ocxlcwfl.execute-api.ap-northeast-2.amazonaws.com",
-        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167"
+        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167",
+        "EXPO_PUBLIC_DEFAULT_MAP_LAT": "37.24240",
+        "EXPO_PUBLIC_DEFAULT_MAP_LNG": "127.08133"
       }
     },
     "production": {
       "distribution": "store",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://40ocxlcwfl.execute-api.ap-northeast-2.amazonaws.com",
-        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167"
+        "EXPO_PUBLIC_WS_URL": "ws://43.201.33.167",
+        "EXPO_PUBLIC_DEFAULT_MAP_LAT": "37.24240",
+        "EXPO_PUBLIC_DEFAULT_MAP_LNG": "127.08133"
       }
     }
   },

@@ -11,6 +11,11 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 const KAKAO_JS_KEY =
   process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "9841405e090263146cdb4a323bd57f92";
 
+const DEFAULT_MAP_COORDS = {
+  lat: Number(process.env.EXPO_PUBLIC_DEFAULT_MAP_LAT ?? 37.24240),
+  lng: Number(process.env.EXPO_PUBLIC_DEFAULT_MAP_LNG ?? 127.08133),
+};
+
 type MapDebugMessage = {
   type: "debug" | "error" | "sdkLoadError" | "ready" | "roomSelected";
   event?: string;
@@ -128,12 +133,12 @@ function buildInitialHtml(lat: number, lng: number): string {
 export function MapScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [coords, setCoords] = useState({ lat: 37.5665, lng: 126.978 });
+  const [coords, setCoords] = useState(DEFAULT_MAP_COORDS);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const webRef = useRef<WebView>(null);
-  const htmlRef = useRef(buildInitialHtml(37.5665, 126.978));
+  const htmlRef = useRef(buildInitialHtml(DEFAULT_MAP_COORDS.lat, DEFAULT_MAP_COORDS.lng));
 
   const { data } = useQuery({
     queryKey: ["rooms"],

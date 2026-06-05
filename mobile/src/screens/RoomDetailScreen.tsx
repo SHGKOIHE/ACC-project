@@ -110,6 +110,30 @@ export function RoomDetailScreen() {
     );
   }
 
+  async function cancelRoom() {
+    try {
+      await apiClient.post(`/api/rooms/${roomId}/cancel`);
+      qc.invalidateQueries({ queryKey: ['room', roomId] });
+      qc.invalidateQueries({ queryKey: ['participants', roomId] });
+      qc.invalidateQueries({ queryKey: ['orders', roomId] });
+      qc.invalidateQueries({ queryKey: ['rooms'] });
+      navigation.goBack();
+    } catch (e: any) {
+      showAlert('오류', e?.message ?? '방 취소 실패');
+    }
+  }
+
+  function confirmCancelRoom() {
+    Alert.alert(
+      '방 취소',
+      '방을 취소하면 참여자들이 더 이상 이 방을 이용할 수 없습니다. 정말 취소하시겠습니까?',
+      [
+        { text: '아니요', style: 'cancel' },
+        { text: '취소하기', style: 'destructive', onPress: cancelRoom },
+      ]
+    );
+  }
+
   const addMenuMutation = useMutation({
     mutationFn: () => apiClient.post(`/api/rooms/${roomId}/orders`, { menuName, quantity: 1, price: parseInt(menuPrice, 10) }),
     onSuccess: () => { setMenuName(''); setMenuPrice(''); refetch(); refetchOrders(); },
@@ -198,44 +222,12 @@ export function RoomDetailScreen() {
       )}
 
       <View style={styles.actions}>
-        {isHost && room.status === 'CONFIRMED' && (
+        {isHost && ['OPEN', 'CLOSED', 'CONFIRMED'].includes(room.status) && (
           <TouchableOpacity
             style={[styles.button, styles.dangerButton]}
-            onPress={() => {
-              Alert.alert(
-                '방 취소',
-                '방을 취소하면 모든 참여자에게 알림이 전송됩니다. 정말 취소하시겠습니까?',
-                [
-                  { text: '아니요', style: 'cancel' },
-                  { text: '취소하기', style: 'destructive', onPress: async () => {
-                      try {
-                        await apiClient.post(`/api/rooms/${roomId}/cancel`);
-                        qc.invalidateQueries({ queryKey: ['rooms'] });
-                        navigation.goBack();
-                      } catch (e: any) {
-                        showAlert('오류', e?.message ?? '방 취소 실패');
-                      }
-                    }},
-                ]
-              );
-            }}
+            onPress={confirmCancelRoom}
           >
             <Text style={styles.buttonText}>방 취소</Text>
-          </TouchableOpacity>
-        )}
-        {room.status === 'OPEN' && isHost && participants.length <= 1 && (
-          <TouchableOpacity
-            style={styles.leaveButton}
-            onPress={() => Alert.alert(
-              '방 나가기',
-              '참여자가 없어 나가면 방이 삭제됩니다. 나가시겠습니까?',
-              [
-                { text: '취소', style: 'cancel' },
-                { text: '나가기', style: 'destructive', onPress: leaveRoom },
-              ]
-            )}
-          >
-            <Text style={styles.leaveButtonText}>나가기</Text>
           </TouchableOpacity>
         )}
         {room.status === 'OPEN' && !isHost && !isParticipant && (
