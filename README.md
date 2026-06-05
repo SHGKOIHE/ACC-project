@@ -8,12 +8,12 @@
 
 | 기능 | 설명 |
 |------|------|
-| 방 생성 / 참여 | 배달 주문방 생성, QR 또는 목록에서 참여 |
+| 방 생성 / 참여 | 배달 주문방 생성, 목록에서 참여 |
 | 주문 관리 | 참여자별 메뉴 추가 / 삭제 |
 | 방 마감 → 주문 확정 | 방장이 모집 마감 후 전체 주문 확정 |
 | 정산 | 배달비 분담, 개인별 정산 금액 계산 |
-| 실시간 채팅 | WebSocket(STOMP) 기반 방 내 채팅 |
-| AI 맛집 추천 | AWS Bedrock(Claude 3 Haiku) 기반 AI 추천 |
+| 실시간 채팅 | WebSocket(STOMP) 기반 방 내 채팅 | (완성 예정)
+| AI 맛집 추천 | AWS Bedrock(Claude 3 Haiku) 기반 AI 추천 | (완성 예정)
 | 푸시 알림 | FCM을 통한 방 상태 변경 알림 |
 
 ---
@@ -74,7 +74,7 @@ Device Token 기반 인증 (앱 최초 실행 시 UUID 생성):
                       POST /api/auth/register
                             │
                    모든 요청: X-Device-Token 헤더
-                            │
+                            │`food-app-assets-sj`
                   Lambda → Redis 조회 → memberId
 ```
 
@@ -117,7 +117,7 @@ cd backend
 ./scripts/build-lambda.sh
 ```
 
-> JAR → S3(`food-app-assets-sj`) → Lambda 코드 업데이트 자동 수행
+> JAR → S3 → Lambda 코드 업데이트 자동 수행
 
 ### 모바일
 
@@ -141,27 +141,6 @@ docker-compose -f docker-compose.monitoring.yml up -d
 k6 run -e BASE_URL=https://<api-gateway-url> k6/main.js \
   --out influxdb=http://localhost:8086/k6
 ```
-
----
-
-## 환경변수
-
-### Mobile (`.env`)
-
-| 변수 | 설명 |
-|------|------|
-| `EXPO_PUBLIC_API_BASE_URL` | API Gateway 엔드포인트 |
-| `EXPO_PUBLIC_WS_URL` | WebSocket 서버 URL |
-| `EXPO_PUBLIC_KAKAO_JS_KEY` | 카카오 지도 API 키 |
-
-### Lambda 환경변수
-
-| 변수 | 설명 |
-|------|------|
-| `DYNAMODB_TABLE_PREFIX` | DynamoDB 테이블 접두사 |
-| `REDIS_HOST` | Redis 엔드포인트 |
-| `INTERNAL_SECRET_KEY` | AI Lambda 내부 인증 키 |
-
 ---
 
 ## 방 상태 흐름
@@ -181,13 +160,3 @@ OPEN → CLOSED → CONFIRMED → DELIVERING → COMPLETED
 | CANCELLED | 취소 |
 
 ---
-
-## 예상 월 비용 (소규모 기준)
-
-| 서비스 | 월 비용 |
-|--------|---------|
-| AWS Lambda | ~$0 (프리 티어) |
-| AWS DynamoDB | ~$1-2 |
-| AWS Bedrock (Claude 3 Haiku) | ~$7-8 |
-| AWS Lightsail | $3.50 |
-| **합계** | **~$13/월** |
