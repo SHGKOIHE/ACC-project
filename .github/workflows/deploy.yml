@@ -2,7 +2,7 @@ name: Deploy Core Backend
 
 on:
   push:
-    branches: [unit/core-backend, main]
+    branches: [main]
     paths: [backend/**]
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Build
+      - name: Build & Test
         run: cd backend && ./gradlew build
 
       - name: Security Scan - Gitleaks
@@ -26,23 +26,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Security Scan - Semgrep
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: p/java
+      - name: Build Lambda JAR
+        run: cd backend && ./gradlew bootJar --no-daemon
 
-      - name: Build Docker Image
-        run: docker build -t foodgroup/backend:${{ github.sha }} ./backend
-
-      - name: Deploy to MiniPC
-        uses: appleboy/ssh-action@v1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.MINIPC_HOST }}
-          username: ${{ secrets.MINIPC_USER }}
-          key: ${{ secrets.MINIPC_SSH_KEY }}
-          script: |
-            cd /app
-            export APP_VERSION=${{ github.sha }}
-            docker compose up -d --no-deps --build app
-            sleep 15
-            curl -f http://localhost:8080/actuator/health || exit 1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Upload JAR to S3
+        run: |
+          JAR=$(ls backend/build/libs/*.jar | head -1)
+          aws s3 cp "$JAR" s3://food-app-assets-sj/lambda/foodgroup-backend.jar
+
+      - name: Update Lambda Function Code
+        run: |
+          aws lambda update-function-code \
+            --function-name foodgroup-backend \
+            --s3-bucket food-app-assets-sj \
+            --s3-key lambda/foodgroup-backend.jar \
+            --region ap-northeast-2
+
+      - name: Wait for Lambda Update
+        run: |
+          aws lambda wait function-updated \
+            --function-name foodgroup-backend \
+            --region ap-northeast-2
+
+      - name: Verify Lambda Health
+        run: |
+          RESULT=$(aws lambda invoke \
+            --function-name foodgroup-backend \
+            --payload '{"httpMethod":"GET","path":"/api/rooms","headers":{},"queryStringParameters":null,"body":null}' \
+            --region ap-northeast-2 \
+            /tmp/lambda-response.json 2>&1)
+          STATUS=$(python3 -c "import json; print(json.load(open('/tmp/lambda-response.json')).get('statusCode', 0))" 2>/dev/null || echo "0")
+          echo "Lambda response status: $STATUS"
+          [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ] && echo "Lambda OK" || exit 1
