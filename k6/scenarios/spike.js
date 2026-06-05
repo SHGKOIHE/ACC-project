@@ -23,7 +23,46 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
-import { generateNickname, uuidv4 } from './auth.js';
+import { uuidv4 } from './auth.js';
+
+// ── 사전 설정: 토큰 등록 + 방 생성 ──────────────────────────
+export function setup() {
+  const tokens = [];
+  // 50개 토큰만 등록 — 200 VUs는 __VU % 50 으로 순환
+  for (let i = 0; i < 50; i++) {
+    const token = uuidv4();
+    const res = http.post(
+      `${BASE_URL}/api/auth/register`,
+      JSON.stringify({ nickname: `spike${i}`, deviceToken: token }),
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+    if (res.status === 200 || res.status === 201) tokens.push(token);
+  }
+
+  // 방 목록 조회용 방 3개 생성
+  const roomIds = [];
+  if (tokens.length > 0) {
+    for (let i = 0; i < 3; i++) {
+      const r = http.post(
+        `${BASE_URL}/api/rooms`,
+        JSON.stringify({
+          title: `스파이크테스트방${i}`,
+          restaurantName: '테스트식당',
+          restaurantAddress: '서울',
+          deliveryFee: 3000,
+          maxParticipants: 10,
+        }),
+        { headers: { 'Content-Type': 'application/json', 'X-Device-Token': tokens[i] } },
+      );
+      try {
+        const id = JSON.parse(r.body).data?.id;
+        if (id) roomIds.push(id);
+      } catch (_) {}
+    }
+  }
+
+  return { tokens, roomIds };
+}
 
 const BASE_URL = __ENV.BASE_URL || 'https://40ocxlcwfl.execute-api.ap-northeast-2.amazonaws.com';
 
@@ -44,6 +83,7 @@ const timeoutCount          = new Counter('spike_timeouts');
 //   220s~ 240s : 쿨다운 (10→0명)
 
 export const options = {
+  setupTimeout: '3m',
   scenarios: {
     spike_test: {
       executor: 'ramping-vus',
@@ -113,42 +153,19 @@ function recordLatency(phase, response) {
 }
 
 // ── 유틸 ─────────────────────────────────────────────────────
-function register() {
-  const nickname    = generateNickname();
-  const deviceToken = uuidv4();
-  const res = http.post(
-    `${BASE_URL}/api/auth/register`,
-    JSON.stringify({ nickname, deviceToken }),
-    {
-      headers: { 'Content-Type': 'application/json' },
-      tags:    { name: 'register' },
-      timeout: '5s',
-    },
-  );
-  const ok = check(res, { '회원가입 201': (r) => r.status === 201 });
-  recordOutcome(currentPhase(), res, ok);
-  if (!ok) return null;
-  return { nickname, deviceToken };
-}
-
 function authHeaders(token) {
   return { 'Content-Type': 'application/json', 'X-Device-Token': token };
 }
 
 // ── 메인 시나리오 ─────────────────────────────────────────────
 // 공지 게시 상황 재현:
-//   모든 사용자가 앱을 열고 → 방 목록 조회 → 방 상세 확인
-export default function () {
+//   이미 로그인된 사용자가 앱을 열고 → 방 목록 조회 → 방 상세 확인
+export default function (data) {
   const phase = currentPhase();
+  const token = data.tokens[__VU % data.tokens.length];
+  const hdrs = authHeaders(token);
 
-  // Step 1: 회원가입 (토큰 발급)
-  const member = register();
-  if (!member) { sleep(0.5); return; }
-  const hdrs = authHeaders(member.deviceToken);
-
-  sleep(0.2);
-
-  // Step 2: 방 목록 조회 (스파이크 핵심 부하)
+  // Step 1: 방 목록 조회 (스파이크 핵심 부하)
   group('방 목록 조회 (스파이크)', () => {
     const listRes = http.get(
       `${BASE_URL}/api/rooms`,
@@ -160,19 +177,23 @@ export default function () {
       '응답 500ms 이내':   (r) => r.timings.duration < 500,
     });
 
-    // 오류율은 HTTP 성공 여부로만 집계한다. 500ms 초과는 응답시간 지표로 별도 판단.
     const okStatus = listRes.status === 200;
     recordOutcome(phase, listRes, okStatus);
     recordLatency(phase, listRes);
 
-    // Step 3: 방 상세 조회 (목록에서 랜덤 선택)
-    let roomId = null;
-    try {
-      const rooms = JSON.parse(listRes.body).data;
-      if (Array.isArray(rooms) && rooms.length > 0) {
-        roomId = rooms[Math.floor(Math.random() * rooms.length)].id;
-      }
-    } catch (_) {}
+    // Step 2: 방 상세 조회 (setup에서 생성한 방 or 목록에서 선택)
+    let roomId = data.roomIds && data.roomIds.length > 0
+      ? data.roomIds[__VU % data.roomIds.length]
+      : null;
+
+    if (!roomId) {
+      try {
+        const rooms = JSON.parse(listRes.body).data;
+        if (Array.isArray(rooms) && rooms.length > 0) {
+          roomId = rooms[Math.floor(Math.random() * rooms.length)].id;
+        }
+      } catch (_) {}
+    }
 
     if (roomId) {
       sleep(0.1);
