@@ -94,13 +94,13 @@ push_metric() {
 }
 
 echo "CloudWatch에 푸시 중..."
-push_metric "http_req_duration_p50" "$P50"
-push_metric "http_req_duration_p90" "$P90"
-push_metric "http_req_duration_p95" "$P95"
-push_metric "http_req_duration_p99" "$P99"
-push_metric "http_req_duration_avg" "$AVG"
-push_metric "http_req_failed_rate"  "$ERR_RATE"  "Percent"
-push_metric "http_reqs_total"       "$TOTAL_REQS" "Count"
+push_metric "http_req_duration_p50_ts" "$P50"
+push_metric "http_req_duration_p90_ts" "$P90"
+push_metric "http_req_duration_p95_ts" "$P95"
+push_metric "http_req_duration_p99_ts" "$P99"
+push_metric "http_req_duration_avg_ts" "$AVG"
+push_metric "http_req_failed_rate_ts"  "$ERR_RATE"  "Percent"
+push_metric "http_reqs_total_ts"       "$TOTAL_REQS" "Count"
 
 echo ""
 echo "완료! CloudWatch 콘솔에서 확인:"
