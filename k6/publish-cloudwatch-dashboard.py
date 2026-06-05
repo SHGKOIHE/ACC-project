@@ -10,7 +10,7 @@ NAMESPACE = "k6/FoodGroup"
 
 def search(metric_name: str, label: str, expr_id: str):
     return {
-        "expression": f'SEARCH('{{{NAMESPACE},Scenario}} MetricName="{metric_name}"', 'Average', 60)',
+        "expression": f"SEARCH('{{{NAMESPACE},Scenario}} MetricName=\"{metric_name}\"', 'Average', 60)",
         "id": expr_id,
         "label": label,
         "period": 60,
@@ -48,7 +48,6 @@ def main() -> None:
         "height": 1,
         "properties": {
             "markdown": "# 🍔 FoodGroup 부하 테스트 대시보드 | UPDATED: all k6 tests",
-            "region": REGION,
         },
     }
 
