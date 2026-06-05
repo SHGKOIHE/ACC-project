@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../utils/alert';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
@@ -10,6 +10,8 @@ import { RoomCard } from '../components/RoomCard';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type MeetingType = 'DELIVERY' | 'DELIVERY_TOGETHER' | 'DINE_OUT';
+
+const ROOM_LIST_REFETCH_INTERVAL_MS = 5000;
 
 const FILTERS: { label: string; value: MeetingType | 'ALL' }[] = [
   { label: '전체', value: 'ALL' },
@@ -26,9 +28,18 @@ export function RoomListScreen() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['rooms', filter],
     queryFn: () => apiClient.get('/api/rooms', { params: filter !== 'ALL' ? { meetingType: filter } : {} }),
+    refetchInterval: ROOM_LIST_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnMount: 'always',
   });
 
   const rooms: any[] = (data as any)?.data ?? [];
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   useEffect(() => {
     if (isError) showAlert('오류', '방 목록을 불러오지 못했습니다.');

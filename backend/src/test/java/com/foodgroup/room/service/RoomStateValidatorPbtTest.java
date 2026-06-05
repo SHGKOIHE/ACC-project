@@ -30,9 +30,9 @@ class RoomStateValidatorPbtTest {
     }
 
     @Property
-    void PBT07_CLOSED는_CONFIRMED_또는_CANCELLED만_허용(@ForAll RoomStatus to) {
+    void PBT07_CLOSED는_OPEN_CONFIRMED_또는_CANCELLED만_허용(@ForAll RoomStatus to) {
         boolean result = validator.isValidTransition(RoomStatus.CLOSED, to);
-        if (to == RoomStatus.CONFIRMED || to == RoomStatus.CANCELLED) {
+        if (to == RoomStatus.OPEN || to == RoomStatus.CONFIRMED || to == RoomStatus.CANCELLED) {
             assertThat(result).isTrue();
         } else {
             assertThat(result).isFalse();
@@ -61,7 +61,9 @@ class RoomStateValidatorPbtTest {
 
     @Property
     void PBT07_유효한_전이는_역방향_불가(@ForAll RoomStatus from, @ForAll RoomStatus to) {
-        if (validator.isValidTransition(from, to) && from != to) {
+        if (validator.isValidTransition(from, to) && from != to
+                && !(from == RoomStatus.OPEN && to == RoomStatus.CLOSED)
+                && !(from == RoomStatus.CLOSED && to == RoomStatus.OPEN)) {
             assertThat(validator.isValidTransition(to, from)).isFalse();
         }
     }

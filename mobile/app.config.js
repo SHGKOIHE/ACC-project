@@ -6,11 +6,17 @@ const androidGoogleServices = resolve(__dirname, './google-services.json');
 
 module.exports = {
   expo: {
-    name: '같이먹자',
+    name: 'Toeater',
     slug: 'foodgroup',
     version: '1.0.0',
     orientation: 'default',
+    icon: './assets/icon.png',
     userInterfaceStyle: 'light',
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#ffffff',
+    },
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: false,

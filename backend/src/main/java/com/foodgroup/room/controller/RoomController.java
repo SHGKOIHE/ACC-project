@@ -33,14 +33,21 @@ public class RoomController {
 
     @GetMapping
     public ApiResponse<List<RoomResponse>> search(
+            @AuthenticationPrincipal MemberPrincipal principal,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) MeetingType meetingType,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Double radius) {
+        String memberId = principal != null ? principal.memberId() : null;
         return ApiResponse.ok(
-                roomService.searchRooms(category, meetingType, lat, lng, radius)
-                        .stream().map(RoomResponse::from).toList());
+                roomService.searchRooms(category, meetingType, lat, lng, radius, memberId)
+                        .stream()
+                        .map(room -> RoomResponse.from(
+                                room,
+                                memberId != null && roomService.isParticipant(room.getId(), memberId),
+                                memberId != null && room.getHostId().equals(memberId)))
+                        .toList());
     }
 
     @GetMapping("/{id}")
@@ -71,6 +78,13 @@ public class RoomController {
     public void close(@PathVariable String id,
                       @AuthenticationPrincipal MemberPrincipal principal) {
         roomService.closeRoom(id, principal.memberId());
+    }
+
+    @PostMapping("/{id}/reopen")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reopen(@PathVariable String id,
+                       @AuthenticationPrincipal MemberPrincipal principal) {
+        roomService.reopenRoom(id, principal.memberId());
     }
 
     @GetMapping("/{id}/participants")

@@ -54,7 +54,7 @@ export function RoomDetailScreen() {
   const room: any = (data as any)?.data;
   const orders: any[] = (ordersData as any)?.data ?? [];
   const participants: any[] = (participantsData as any)?.data ?? [];
-  const isHost: boolean = room?.isHost ?? false;
+  const isHost: boolean = !!room?.hostId && room.hostId === memberId;
   const isParticipant: boolean = room?.isParticipant ?? false;
   const nicknameMap: Record<string, string> = Object.fromEntries(
     participants.map((p: any) => [p.memberId, p.nickname])
@@ -220,7 +220,7 @@ export function RoomDetailScreen() {
               );
             }}
           >
-            <Text style={styles.buttonText}>방 취소 (나가기)</Text>
+            <Text style={styles.buttonText}>방 취소</Text>
           </TouchableOpacity>
         )}
         {room.status === 'OPEN' && isHost && participants.length <= 1 && (
@@ -228,7 +228,7 @@ export function RoomDetailScreen() {
             style={styles.leaveButton}
             onPress={() => Alert.alert(
               '방 나가기',
-              '방에 혼자 있습니다. 나가면 방이 취소됩니다. 나가시겠습니까?',
+              '참여자가 없어 나가면 방이 삭제됩니다. 나가시겠습니까?',
               [
                 { text: '취소', style: 'cancel' },
                 { text: '나가기', style: 'destructive', onPress: leaveRoom },
@@ -252,14 +252,21 @@ export function RoomDetailScreen() {
           <TouchableOpacity
             style={styles.button}
             onPress={() => {
-              if (orders.length === 0) {
-                showAlert('알림', '주문을 먼저 추가해주세요.');
+              const orderedMembers = new Set(orders.map((o: any) => o.memberId));
+              const missing = participants.filter((p: any) => !orderedMembers.has(p.memberId));
+              if (missing.length > 0) {
+                showAlert('알림', `${missing.map((p: any) => p.nickname).join(', ')}님이 최소 1개 메뉴를 주문해야 마감할 수 있습니다.`);
                 return;
               }
               mutate(() => apiClient.post(`/api/rooms/${roomId}/close`));
             }}
           >
             <Text style={styles.buttonText}>마감하기</Text>
+          </TouchableOpacity>
+        )}
+        {isHost && room.status === 'CLOSED' && (
+          <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => mutate(() => apiClient.post(`/api/rooms/${roomId}/reopen`))}>
+            <Text style={styles.buttonText}>다시 모집하기</Text>
           </TouchableOpacity>
         )}
         {isHost && room.status === 'CLOSED' && (
@@ -354,6 +361,7 @@ const styles = StyleSheet.create({
   leaveButton: { borderWidth: 1, borderColor: '#aaa', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 4 },
   leaveButtonText: { color: '#888', fontWeight: '600', fontSize: 14 },
   dangerButton: { backgroundColor: '#e74c3c' },
+  secondaryButton: { backgroundColor: '#34495e' },
   aiButton: { backgroundColor: '#6c5ce7' },
   deleteButton: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#e74c3c', borderRadius: 4 },
   deleteButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },

@@ -45,7 +45,7 @@ function MainTabs() {
         tabBarActiveTintColor: '#FF6B35',
         tabBarInactiveTintColor: '#aaa',
         tabBarLabel: ({ color }) => {
-          let label = '같이먹자';
+          let label = 'Toeater';
           if (route.name === 'AiRecommend') label = 'AI 추천';
           else if (route.name === 'Map') label = '지도';
           else if (route.name === 'Profile') label = '프로필';
@@ -60,7 +60,7 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="RoomList" component={RoomListScreen} options={{ title: '같이먹자' }} />
+      <Tab.Screen name="RoomList" component={RoomListScreen} options={{ title: 'Toeater' }} />
       <Tab.Screen name="AiRecommend" component={AiRecommendScreen} options={{ title: 'AI 추천' }} />
       <Tab.Screen name="Map" component={MapScreen} options={{ title: '지도' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: '프로필' }} />

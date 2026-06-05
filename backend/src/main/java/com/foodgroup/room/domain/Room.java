@@ -34,6 +34,12 @@ public class Room {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public void reopen() {
+        this.status = RoomStatus.OPEN;
+        this.closedAt = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void incrementParticipantCount() {
         this.currentParticipantCount++;
         this.updatedAt = LocalDateTime.now();

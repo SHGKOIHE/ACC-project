@@ -15,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,9 @@ public class RoomService {
     private final MemberPort memberPort;
 
     public Room createRoom(CreateRoomCommand cmd) {
+        if (hasActiveRoom(cmd.hostId())) {
+            throw new BusinessException(ErrorCode.ALREADY_IN_ACTIVE_ROOM);
+        }
         LocalDateTime now = LocalDateTime.now();
         Room room = roomPort.save(Room.builder()
                 .id(UUID.randomUUID().toString())
@@ -73,9 +78,17 @@ public class RoomService {
     }
 
     public List<Room> searchRooms(String category, MeetingType meetingType,
-                                   Double lat, Double lng, Double radiusMeters) {
-        List<Room> rooms = roomPort.scanByStatus(RoomStatus.OPEN);
-        return rooms.stream()
+                                   Double lat, Double lng, Double radiusMeters, String memberId) {
+        LinkedHashMap<String, Room> visibleRooms = new LinkedHashMap<>();
+        roomPort.scanByStatus(RoomStatus.OPEN).forEach(room -> visibleRooms.put(room.getId(), room));
+        if (memberId != null && !memberId.isBlank()) {
+            roomParticipantPort.findByMemberId(memberId).stream()
+                    .map(participant -> roomPort.findById(participant.getRoomId()))
+                    .flatMap(Optional::stream)
+                    .filter(this::isActiveRoom)
+                    .forEach(room -> visibleRooms.put(room.getId(), room));
+        }
+        return visibleRooms.values().stream()
                 .filter(r -> category == null || category.equals(r.getRestaurantCategory()))
                 .filter(r -> meetingType == null || meetingType == r.getMeetingType())
                 .filter(r -> {
@@ -88,6 +101,11 @@ public class RoomService {
                 .toList();
     }
 
+    public List<Room> searchRooms(String category, MeetingType meetingType,
+                                   Double lat, Double lng, Double radiusMeters) {
+        return searchRooms(category, meetingType, lat, lng, radiusMeters, null);
+    }
+
     public void joinRoom(String roomId, String memberId) {
         Room room = findRoomOrThrow(roomId);
         if (room.getStatus() != RoomStatus.OPEN) {
@@ -95,6 +113,9 @@ public class RoomService {
         }
         if (roomParticipantPort.existsByRoomIdAndMemberId(roomId, memberId)) {
             throw new BusinessException(ErrorCode.ALREADY_JOINED);
+        }
+        if (hasActiveRoom(memberId)) {
+            throw new BusinessException(ErrorCode.ALREADY_IN_ACTIVE_ROOM);
         }
         if (room.getCurrentParticipantCount() >= room.getMaxParticipants()) {
             throw new BusinessException(ErrorCode.ROOM_FULL);
@@ -141,7 +162,18 @@ public class RoomService {
         if (!orderItemPort.existsByRoomId(roomId)) {
             throw new BusinessException(ErrorCode.ORDER_NOT_CONFIRMABLE);
         }
+        requireEveryParticipantHasOrder(roomId);
         validateAndTransition(room, RoomStatus.CLOSED);
+        roomPort.save(room);
+    }
+
+    public void reopenRoom(String roomId, String hostId) {
+        Room room = findRoomOrThrow(roomId);
+        requireHost(room, hostId);
+        if (!stateValidator.isValidTransition(room.getStatus(), RoomStatus.OPEN)) {
+            throw new BusinessException(ErrorCode.ROOM_STATUS_INVALID);
+        }
+        room.reopen();
         roomPort.save(room);
     }
 
@@ -213,6 +245,31 @@ public class RoomService {
     private Room findRoomOrThrow(String roomId) {
         return roomPort.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+    }
+
+    private void requireEveryParticipantHasOrder(String roomId) {
+        for (RoomParticipant participant : roomParticipantPort.findByRoomId(roomId)) {
+            if (!orderItemPort.existsByRoomIdAndMemberId(roomId, participant.getMemberId())) {
+                throw new BusinessException(ErrorCode.ORDER_NOT_CONFIRMABLE);
+            }
+        }
+    }
+
+    private boolean hasActiveRoom(String memberId) {
+        if (memberId == null || memberId.isBlank()) {
+            return false;
+        }
+        return roomParticipantPort.findByMemberId(memberId).stream()
+                .map(participant -> roomPort.findById(participant.getRoomId()))
+                .flatMap(Optional::stream)
+                .anyMatch(this::isActiveRoom);
+    }
+
+    private boolean isActiveRoom(Room room) {
+        return room.getStatus() == RoomStatus.OPEN
+                || room.getStatus() == RoomStatus.CLOSED
+                || room.getStatus() == RoomStatus.CONFIRMED
+                || room.getStatus() == RoomStatus.DELIVERING;
     }
 
     private double haversineMeters(double lat1, double lng1, double lat2, double lng2) {
