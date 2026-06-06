@@ -29,6 +29,7 @@ module.exports = {
         backgroundColor: '#ffffff',
       },
       package: 'com.foodgroup.mobile',
+      usesCleartextTraffic: true,
       ...(existsSync(androidGoogleServices) && { googleServicesFile: './google-services.json' }),
     },
     plugins: [

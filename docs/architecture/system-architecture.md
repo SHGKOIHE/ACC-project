@@ -1,7 +1,7 @@
 # System Architecture
 # 배달비 절약 음식 공동구매 앱
 
-**최종 수정**: 2026-06-01
+**최종 수정**: 2026-06-05
 **기술 스택**: Spring Boot 3.3 / Java 17 (AWS Lambda), React Native (Expo), AWS Lambda (Node.js 20), DynamoDB, Lightsail
 
 ---
@@ -17,18 +17,25 @@
               v                v                  v
      [API Gateway]      [Lightsail]         [Kakao 지도 SDK]
   execute-api.ap-      43.201.33.167        (WebView 직접 호출)
-  northeast-2.aws       (WebSocket)
+  northeast-2.aws    (WebSocket wss://)
               |                |
               v                v
         [Lambda]         [chat-server]
     foodgroup-backend   (Spring Boot WebSocket)
-      (java17, 1GB)             |
-              |                 v
-              v          [DynamoDB]
-        [DynamoDB]       ChatMessages
-   Members / Rooms /      (roomId HASH,
-   RoomParticipants /     createdAtId RANGE,
-   OrderItems /           TTL 30일)
+    (java17, 1GB,                |
+     SnapStart ON)          [Redis]
+              |           Pub/Sub 브로커
+              |                 |
+              v                 v
+        [Redis]          [DynamoDB]
+    deviceToken 인증     ChatMessages
+    (device-token:*)     (roomId HASH,
+              |          createdAtId RANGE,
+              v          TTL 30일)
+        [DynamoDB]
+   Members / Rooms /
+   RoomParticipants /
+   OrderItems /
    Settlements /
    MemberSettlements
               |
@@ -78,12 +85,15 @@ ApiResponse<T> JSON 응답
 ```
 React Native (STOMP over WebSocket)
     |
-    | ws://43.201.33.167
+    | wss://43.201.33.167/ws-native
+    | X-Device-Token 헤더
     v
-Lightsail (nginx) → chat-server (Spring Boot WebSocket)
+Lightsail chat-server (Spring Boot WebSocket)
+    |
+    | HandshakeInterceptor: Redis에서 deviceToken → memberId 검증
     |
     +---> /topic/room/{roomId}/chat       채팅 메시지 브로드캐스트
-    +---> /topic/room/{roomId}/members    참여자 변경 알림
+    +---> Redis Pub/Sub (멀티 인스턴스 확장 대비)
     |
     v
 DynamoDB ChatMessages (읽기/쓰기, TTL 30일)
@@ -94,15 +104,18 @@ DynamoDB ChatMessages (읽기/쓰기, TTL 30일)
 ```
 React Native
     |
-    | POST /api/ai/recommend
+    | POST /api/recommend          (단독 추천)
+    | POST /api/rooms/{id}/recommend (방 기반 추천)
+    | X-Device-Token 헤더
     v
 API Gateway → Lambda (foodgroup-backend)
     |
-    | AWS SDK 직접 invoke (X-Internal-Key 헤더 포함)
+    | HTTP invoke (X-Internal-Key 헤더 포함)
     v
 Lambda (food-recommend-api, nodejs20.x)
     |
     | 규칙 엔진 → Bedrock Claude 3 Haiku (설명 생성)
+    | Bedrock 실패 시 규칙 엔진 fallback (fallback: true)
     v
 { recommendations, explanation } 반환
     |
@@ -130,7 +143,9 @@ React Native
 
 - 디바이스 최초 실행 시 UUID 생성 → SecureStore 저장
 - 모든 API 요청에 `X-Device-Token` 헤더 포함
-- 백엔드가 Members 테이블에서 deviceToken으로 조회
+- **REST API (Lambda)**: Redis에서 `device-token:{token}` → memberId 조회 (빠른 인메모리 검색)
+- **WebSocket (chat-server)**: HandshakeInterceptor에서 동일한 Redis 조회로 memberId 확인
+- Redis 미등록 토큰 → 401 / WebSocket handshake 거부
 
 ---
 
@@ -138,10 +153,12 @@ React Native
 
 | 구분 | 서비스 | 비고 |
 |------|--------|------|
-| API 서버 | AWS Lambda (java17) | S3 JAR 배포 (`./scripts/build-lambda.sh`) |
+| API 서버 | AWS Lambda (java17) | S3 JAR 배포, **SnapStart ON** (Version 3~) |
+| CI/CD | GitHub Actions | push → build → S3 → Lambda update-function-code |
 | DB | DynamoDB (ap-northeast-2) | PAY_PER_REQUEST |
-| WebSocket | Lightsail (43.201.33.167) | nginx + chat-server |
-| AI 추천 | Lambda (nodejs20.x) | Bedrock Claude 3 Haiku |
+| 인증 캐시 | Redis (Docker, Lightsail) | deviceToken → memberId, TTL 24h |
+| WebSocket | Lightsail (43.201.33.167) | chat-server:8081, wss:// |
+| AI 추천 | Lambda (nodejs20.x) | Bedrock Claude 3 Haiku, 규칙 엔진 fallback |
 | 이메일 인증 | AWS SES | feella001@gmail.com |
 | 푸시 알림 | FCM | |
 | 지도 | Kakao 지도 SDK | WebView, 앱 내 JS 키 |
