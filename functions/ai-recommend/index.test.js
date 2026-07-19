@@ -1,7 +1,7 @@
 'use strict';
 
 const { handler } = require('./index');
-const { calculateScore, detectCategory } = require('./rule_engine');
+const { calculateScore, recommend, detectCategory } = require('./rule_engine');
 
 const { generateRecommendations } = require('./bedrock_client');
 
@@ -15,9 +15,9 @@ beforeEach(() => {
   process.env.INTERNAL_SECRET_KEY = VALID_KEY;
   generateRecommendations.mockResolvedValue({
     recommendations: [
-      { rank: 1, restaurantName: 'AI 치킨집', score: 92, reason: '치킨 선호가 높습니다.' },
-      { rank: 2, restaurantName: 'AI 피자집', score: 81, reason: '피자 주문도 있어 함께 먹기 좋습니다.' },
-      { rank: 3, restaurantName: 'AI 중식집', score: 70, reason: '단체 주문에 적합합니다.' },
+      { rank: 1, restaurantName: '치킨', score: 92, reason: '치킨 선호가 높습니다.' },
+      { rank: 2, restaurantName: '피자', score: 81, reason: '피자 주문도 있어 함께 먹기 좋습니다.' },
+      { rank: 3, restaurantName: '중식', score: 70, reason: '단체 주문에 적합합니다.' },
     ],
     explanation: 'AI가 주문 선호를 기준으로 추천했습니다.',
   });
@@ -73,7 +73,7 @@ test('정상 요청 시 recommendations 배열 포함 응답', async () => {
   expect(Array.isArray(parsed.recommendations)).toBe(true);
   expect(parsed.recommendations.length).toBe(3);
   expect(parsed.recommendations[0]).toHaveProperty('rank', 1);
-  expect(parsed.recommendations[0]).toHaveProperty('restaurantName', 'AI 치킨집');
+  expect(parsed.recommendations[0]).toHaveProperty('restaurantName', '치킨');
   expect(parsed.recommendations[0]).toHaveProperty('score', 92);
   expect(parsed.explanation).toBe('AI가 주문 선호를 기준으로 추천했습니다.');
   expect(generateRecommendations).toHaveBeenCalledWith(
@@ -96,7 +96,8 @@ test('Bedrock 추천 실패 시 규칙 엔진 결과로 폴백', async () => {
   const parsed = JSON.parse(result.body);
   expect(parsed.fallback).toBe(true);
   expect(parsed.recommendations).toHaveLength(3);
-  expect(parsed.recommendations[0]).toHaveProperty('restaurantName');
+  expect(parsed.recommendations[0]).toMatchObject({ restaurantName: '치킨' });
+  expect(parsed.recommendations[0].reason).not.toBe('');
 });
 
 test('participants 없어도 200 응답', async () => {
@@ -111,6 +112,8 @@ test('치킨 키워드 포함 아이템 → 치킨 카테고리 감지', () => {
   expect(detectCategory('후라이드치킨')).toBe('치킨');
   expect(detectCategory('치즈버거')).toBe('버거');
   expect(detectCategory('짜장면')).toBe('중식');
+  expect(detectCategory('크림파스타')).toBe('양식');
+  expect(detectCategory('CHICKEN 샐러드')).toBe('치킨');
 });
 
 test('calculateScore: 카테고리 필터 일치 시 높은 점수', () => {
@@ -137,4 +140,22 @@ test('calculateScore: 3인 이상 그룹 친화 카테고리 보너스', () => {
   const chickenScore = calculateScore({ category: '치킨' }, participants, filters);
   const ramenScore = calculateScore({ category: '일식' }, participants, filters);
   expect(chickenScore).toBeGreaterThan(ramenScore);
+});
+
+
+test('자유 입력의 음식 키워드가 폴백 추천 순위에 반영된다', () => {
+  const recommendations = recommend([], { userMessage: '오늘은 마라탕이나 짬뽕처럼 매운 중식이 먹고 싶어요' });
+
+  expect(recommendations[0]).toMatchObject({ restaurantName: '중식', score: 15 });
+  expect(recommendations[0].reason).toContain('입력한 요청');
+});
+
+test('폴백 결과는 실제 식당이나 검증되지 않은 배달 정보를 주장하지 않는다', () => {
+  const recommendations = recommend([], {});
+  const serialized = JSON.stringify(recommendations);
+
+  expect(serialized).not.toContain('맛집');
+  expect(serialized).not.toContain('배달이 빠');
+  expect(serialized).not.toContain('배달비');
+  expect(recommendations.every(item => !item.restaurantName.endsWith('집'))).toBe(true);
 });

@@ -1,6 +1,6 @@
 'use strict';
 
-const { parseRecommendationResponse } = require('./bedrock_client');
+const { buildPrompt, parseRecommendationResponse } = require('./bedrock_client');
 
 test('Bedrock JSON 응답을 추천 결과로 정규화한다', () => {
   const result = parseRecommendationResponse(JSON.stringify({
@@ -30,4 +30,21 @@ test('Bedrock 코드블록 응답에서도 JSON만 추출한다', () => {
 test('추천이 3개 미만이면 실패시켜 폴백을 유도한다', () => {
   expect(() => parseRecommendationResponse('{"recommendations":[{"restaurantName":"A"}],"explanation":""}'))
     .toThrow('fewer than 3');
+});
+
+
+test('프롬프트는 국제캠퍼스 음식 추천 범위와 사실성 제약을 명시한다', () => {
+  const prompt = buildPrompt([], {
+    category: '치킨',
+    userMessage: '여럿이 먹을 음식',
+    maxDeliveryFee: 3000,
+    latitude: 37.2424,
+    longitude: 127.08133,
+  });
+
+  expect(prompt).toContain('경희대학교 국제캠퍼스');
+  expect(prompt).toContain('음식 또는 메뉴 카테고리');
+  expect(prompt).toContain('실제 식당, 가격, 배달비, 거리');
+  expect(prompt).not.toContain('37.2424');
+  expect(prompt).not.toContain('maxDeliveryFee');
 });

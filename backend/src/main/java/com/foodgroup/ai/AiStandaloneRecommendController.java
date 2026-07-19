@@ -27,8 +27,8 @@ public class AiStandaloneRecommendController {
                         request.category(),
                         request.maxDeliveryFee(),
                         request.userMessage(),
-                        request.latitude(),
-                        request.longitude()
+                        null,
+                        null
                 )
         );
 
@@ -37,8 +37,6 @@ public class AiStandaloneRecommendController {
     }
 
     public record StandaloneRecommendRequest(
-            Double latitude,
-            Double longitude,
             String category,
             Integer maxDeliveryFee,
             String userMessage

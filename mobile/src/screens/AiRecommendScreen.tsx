@@ -27,16 +27,12 @@ interface RecommendResponse {
 
 export function AiRecommendScreen() {
   const [selectedCategory, setSelectedCategory] = useState('전체');
-  const [maxFee, setMaxFee] = useState('');
   const [userMessage, setUserMessage] = useState('');
 
   const mutation = useMutation({
     mutationFn: () =>
       apiClient.post('/api/recommend', {
-        latitude: 37.5665,
-        longitude: 126.978,
         category: selectedCategory === '전체' ? null : selectedCategory,
-        maxDeliveryFee: maxFee ? parseInt(maxFee, 10) : null,
         userMessage: userMessage || null,
       }),
   });
@@ -46,7 +42,7 @@ export function AiRecommendScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>AI 음식 추천</Text>
-      <Text style={styles.subtitle}>취향과 조건을 입력하면 AI가 음식점을 추천해드려요</Text>
+      <Text style={styles.subtitle}>취향과 조건을 입력하면 AI가 음식을 추천해드려요</Text>
 
       <View style={styles.section}>
         <Text style={styles.label}>무엇이 드시고 싶으신가요?</Text>
@@ -54,7 +50,7 @@ export function AiRecommendScreen() {
           style={styles.textArea}
           value={userMessage}
           onChangeText={setUserMessage}
-          placeholder="예: 친구들이랑 시켜먹을 건데 매운 거 좋아해요. 배달비 저렴한 곳으로 추천해주세요"
+          placeholder="예: 친구들이랑 같이 먹을 매콤한 음식이 좋아요"
           multiline
           numberOfLines={4}
           textAlignVertical="top"
@@ -78,17 +74,6 @@ export function AiRecommendScreen() {
             ))}
           </View>
         </ScrollView>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>최대 배달비 (원)</Text>
-        <TextInput
-          style={styles.input}
-          value={maxFee}
-          onChangeText={setMaxFee}
-          placeholder="예: 3000"
-          keyboardType="numeric"
-        />
       </View>
 
       <TouchableOpacity
@@ -153,14 +138,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#FF6B35', borderColor: '#FF6B35' },
   chipText: { fontSize: 13, color: '#555' },
   chipTextActive: { color: '#fff', fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#333',
-  },
   textArea: {
     borderWidth: 1,
     borderColor: '#ddd',

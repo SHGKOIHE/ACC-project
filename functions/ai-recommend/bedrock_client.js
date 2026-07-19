@@ -7,18 +7,24 @@ const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240
 const client = new BedrockRuntimeClient({ region: REGION });
 
 function buildPrompt(participants, filters) {
-  return `너는 음식 공동구매 앱의 추천 엔진이다. 참여자 주문 선호와 필터를 보고 음식점 카테고리/식당명을 추천해라.
+  const safeFilters = {
+    category: filters.category,
+    userMessage: filters.userMessage,
+  };
+
+  return `너는 음식 공동구매 앱의 추천 엔진이다. 경희대학교 국제캠퍼스 학생들의 주문 상황에 어울리는 음식 또는 메뉴 카테고리를 추천해라.
 
 입력 데이터:
-${JSON.stringify({ participants, filters }, null, 2)}
+${JSON.stringify({ participants, filters: safeFilters }, null, 2)}
 
 규칙:
 - 반드시 한국어 JSON 객체만 출력한다. 마크다운, 설명 문장, 코드블록은 금지한다.
 - recommendations는 정확히 3개를 반환한다.
 - rank는 1부터 3까지 중복 없이 오름차순이다.
-- restaurantName은 실제 상호를 모르면 "치킨집", "피자집"처럼 카테고리 기반 이름으로 작성한다.
+- restaurantName은 하위 호환을 위한 필드명이다. 실제 상호를 만들지 말고 "치킨", "피자", "떡볶이"처럼 추천 음식 또는 메뉴 카테고리를 작성한다.
 - score는 0~100 정수이며 입력 선호와 필터에 얼마나 맞는지 나타낸다.
-- reason은 추천 이유를 한국어 한 문장으로 작성한다.
+- reason은 참여자 주문, 명시 카테고리, 사용자 요청에서 확인 가능한 근거만 사용해 한국어 한 문장으로 작성한다.
+- 실제 식당, 가격, 배달비, 거리, 영업 여부, 배달 속도를 알고 있는 것처럼 표현하지 않는다.
 - explanation은 전체 추천 결과를 한국어 1~2문장으로 요약한다.
 
 출력 스키마:
@@ -104,4 +110,4 @@ async function generateRecommendations(participants, filters) {
   return parseRecommendationResponse(text);
 }
 
-module.exports = { generateRecommendations, parseRecommendationResponse };
+module.exports = { buildPrompt, generateRecommendations, parseRecommendationResponse };
