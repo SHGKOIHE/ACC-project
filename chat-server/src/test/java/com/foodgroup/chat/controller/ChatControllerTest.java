@@ -6,6 +6,7 @@ import com.foodgroup.chat.dto.ChatMessageResponse;
 import com.foodgroup.chat.dto.ChatMessageType;
 import com.foodgroup.chat.pubsub.RedisChatPublisher;
 import com.foodgroup.chat.repository.ChatMessageStore;
+import com.foodgroup.chat.repository.MemberNicknameLookup;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -26,7 +27,9 @@ class ChatControllerTest {
         RedisChatPublisher publisher = mock(RedisChatPublisher.class);
         ObjectProvider<ChatMessageStore> storeProvider = mock(ObjectProvider.class);
         when(storeProvider.getIfAvailable()).thenReturn(null); // DynamoDB 비활성: 발행만
-        ChatController controller = new ChatController(publisher, storeProvider);
+        ObjectProvider<MemberNicknameLookup> nicknameProvider = mock(ObjectProvider.class);
+        when(nicknameProvider.getIfAvailable()).thenReturn(null); // 조회 불가: 기본 닉네임
+        ChatController controller = new ChatController(publisher, storeProvider, nicknameProvider);
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
         headers.setSessionAttributes(new HashMap<>());
         headers.getSessionAttributes().put(JwtChannelInterceptor.SESSION_MEMBER_ID, "member-1");
