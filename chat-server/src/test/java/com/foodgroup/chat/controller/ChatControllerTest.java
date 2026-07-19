@@ -5,8 +5,10 @@ import com.foodgroup.chat.dto.ChatMessageRequest;
 import com.foodgroup.chat.dto.ChatMessageResponse;
 import com.foodgroup.chat.dto.ChatMessageType;
 import com.foodgroup.chat.pubsub.RedisChatPublisher;
+import com.foodgroup.chat.repository.ChatMessageStore;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 
 import java.util.HashMap;
@@ -14,13 +16,17 @@ import java.util.HashMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ChatControllerTest {
 
     @Test
+    @SuppressWarnings("unchecked")
     void publishesIncomingRoomChatMessageToRedis() {
         RedisChatPublisher publisher = mock(RedisChatPublisher.class);
-        ChatController controller = new ChatController(publisher);
+        ObjectProvider<ChatMessageStore> storeProvider = mock(ObjectProvider.class);
+        when(storeProvider.getIfAvailable()).thenReturn(null); // DynamoDB 비활성: 발행만
+        ChatController controller = new ChatController(publisher, storeProvider);
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
         headers.setSessionAttributes(new HashMap<>());
         headers.getSessionAttributes().put(JwtChannelInterceptor.SESSION_MEMBER_ID, "member-1");

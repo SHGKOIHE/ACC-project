@@ -8,7 +8,7 @@ import org.springframework.data.redis.connection.Message;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -27,7 +27,7 @@ class RedisChatSubscriberTest {
                 null,
                 ChatMessageType.TALK,
                 "hello",
-                Instant.parse("2026-06-01T00:00:00Z")
+                LocalDateTime.parse("2026-06-01T00:00:00")
         );
         Message redisMessage = mock(Message.class);
         org.mockito.Mockito.when(redisMessage.getBody()).thenReturn(objectMapper.writeValueAsString(message).getBytes(StandardCharsets.UTF_8));

@@ -1,6 +1,6 @@
 package com.foodgroup.chat.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public record ChatMessageResponse(
         String id,
@@ -9,6 +9,6 @@ public record ChatMessageResponse(
         String nickname,
         ChatMessageType type,
         String content,
-        Instant createdAt
+        LocalDateTime createdAt
 ) {
 }

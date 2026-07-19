@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,7 +28,7 @@ class RedisChatPublisherTest {
                 null,
                 ChatMessageType.TALK,
                 "hello",
-                Instant.parse("2026-06-01T00:00:00Z")
+                LocalDateTime.parse("2026-06-01T00:00:00")
         );
 
         publisher.publish(message);
