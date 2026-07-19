@@ -17,13 +17,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * IP 화이트리스트 제거 이후의 동작을 검증한다.
+ * 핸드셰이크 허용 기준은 소스 IP가 아니라 Redis에 유효한 디바이스 토큰이 존재하는지 여부다.
+ */
 class LightsailIpHandshakeInterceptorTest {
 
     @Test
-    void allowsNewLightsailPrivateIpWhenDeviceTokenExistsInRedis() {
+    void acceptsHandshakeWhenDeviceTokenExistsInRedis() {
         RedisMocks redis = redisReturning("member-1");
         LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
+                redis.template(), "device-token:"
         );
         ServerHttpRequest request = requestWithHeaders(Map.of(
                 "X-Forwarded-For", "100.64.11.88, 10.0.0.1",
@@ -40,24 +44,24 @@ class LightsailIpHandshakeInterceptorTest {
     }
 
     @Test
-    void allowsAllowedIpWhenDeviceTokenIsMissingSoStompConnectCanAuthenticate() {
+    void rejectsHandshakeWhenDeviceTokenIsMissing() {
         RedisMocks redis = redisReturning("member-1");
         LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
+                redis.template(), "device-token:"
         );
         ServerHttpRequest request = requestWithHeaders(Map.of("X-Forwarded-For", "100.64.11.88"));
 
         boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
 
-        assertThat(allowed).isTrue();
+        assertThat(allowed).isFalse();
         verifyNoInteractions(redis.values());
     }
 
     @Test
-    void rejectsAllowedIpWhenDeviceTokenDoesNotExistInRedis() {
+    void rejectsHandshakeWhenDeviceTokenDoesNotExistInRedis() {
         RedisMocks redis = redisReturning(null);
         LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
+                redis.template(), "device-token:"
         );
         ServerHttpRequest request = requestWithHeaders(Map.of(
                 "X-Real-IP", "43.201.33.167",
@@ -71,33 +75,17 @@ class LightsailIpHandshakeInterceptorTest {
     }
 
     @Test
-    void rejectsUnknownIpBeforeCheckingRedis() {
+    void acceptsHandshakeRegardlessOfSourceIpWhenTokenIsValid() {
         RedisMocks redis = redisReturning("member-1");
         LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
+                redis.template(), "device-token:"
         );
-        ServerHttpRequest request = requestWithRemoteAddress("203.0.113.10");
-
-        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
-
-        assertThat(allowed).isFalse();
-        verifyNoInteractions(redis.values());
-    }
-
-    @Test
-    void alwaysAllowsNewLightsailPrivateIpEvenWhenLegacySingleIpPropertyIsConfigured() {
-        RedisMocks redis = redisReturning("member-1");
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167", "device-token:"
-        );
-        ServerHttpRequest request = requestWithHeaders(Map.of(
-                "X-Forwarded-For", "100.64.11.88",
-                "X-Device-Token", "device-1"
-        ));
+        ServerHttpRequest request = requestWithRemoteAddressAndToken("203.0.113.10", "device-1");
 
         boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
 
         assertThat(allowed).isTrue();
+        verify(redis.values()).get("device-token:device-1");
     }
 
     private ServerHttpRequest requestWithHeaders(Map<String, String> values) {
@@ -108,9 +96,11 @@ class LightsailIpHandshakeInterceptorTest {
         return request;
     }
 
-    private ServerHttpRequest requestWithRemoteAddress(String host) {
+    private ServerHttpRequest requestWithRemoteAddressAndToken(String host, String deviceToken) {
         ServerHttpRequest request = mock(ServerHttpRequest.class);
-        when(request.getHeaders()).thenReturn(new HttpHeaders());
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Device-Token", deviceToken);
+        when(request.getHeaders()).thenReturn(headers);
         when(request.getRemoteAddress()).thenReturn(new InetSocketAddress(host, 12345));
         return request;
     }
