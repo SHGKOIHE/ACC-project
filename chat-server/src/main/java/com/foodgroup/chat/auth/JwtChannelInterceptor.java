@@ -1,5 +1,7 @@
 package com.foodgroup.chat.auth;
 
+import com.foodgroup.chat.repository.RoomParticipantLookup;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.Message;
@@ -18,19 +20,24 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     public static final String SESSION_MEMBER_ID = "memberId";
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
+    private static final String ROOM_PATH_MARKER = "/room/";
 
     private final JwtVerifier jwtVerifier;
     private final StringRedisTemplate redisTemplate;
     private final String deviceTokenKeyPrefix;
+    // DynamoDB가 비활성화된 로컬 환경에서는 참여자 검증을 건너뛰도록 Optional 주입
+    private final ObjectProvider<RoomParticipantLookup> roomParticipantLookupProvider;
 
     public JwtChannelInterceptor(
             JwtVerifier jwtVerifier,
             StringRedisTemplate redisTemplate,
-            @Value("${chat.auth.device-token-key-prefix:${CHAT_DEVICE_TOKEN_KEY_PREFIX:device-token:}}") String deviceTokenKeyPrefix
+            @Value("${chat.auth.device-token-key-prefix:${CHAT_DEVICE_TOKEN_KEY_PREFIX:device-token:}}") String deviceTokenKeyPrefix,
+            ObjectProvider<RoomParticipantLookup> roomParticipantLookupProvider
     ) {
         this.jwtVerifier = jwtVerifier;
         this.redisTemplate = redisTemplate;
         this.deviceTokenKeyPrefix = deviceTokenKeyPrefix == null ? "" : deviceTokenKeyPrefix;
+        this.roomParticipantLookupProvider = roomParticipantLookupProvider;
     }
 
     @Override
@@ -67,12 +74,41 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
         }
 
         if (StompCommand.SEND.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-            if (accessor.getSessionAttributes() == null || accessor.getSessionAttributes().get(SESSION_MEMBER_ID) == null) {
+            Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+            Object memberId = sessionAttributes == null ? null : sessionAttributes.get(SESSION_MEMBER_ID);
+            if (memberId == null) {
                 throw new IllegalArgumentException("Not authenticated");
+            }
+
+            // BR-CHAT-01: 방 참여자만 해당 방의 채팅을 구독/전송할 수 있다.
+            String roomId = extractRoomId(accessor.getDestination());
+            if (roomId != null) {
+                RoomParticipantLookup lookup = roomParticipantLookupProvider.getIfAvailable();
+                if (lookup != null && !lookup.isParticipant(roomId, String.valueOf(memberId))) {
+                    throw new IllegalArgumentException("Not a room participant");
+                }
             }
         }
 
         return message;
+    }
+
+    /**
+     * "/topic/room/{roomId}" 및 "/app/room/{roomId}/chat" 형태에서 roomId를 추출한다.
+     * 방 관련 목적지가 아니면 null.
+     */
+    private String extractRoomId(String destination) {
+        if (destination == null) {
+            return null;
+        }
+        int idx = destination.indexOf(ROOM_PATH_MARKER);
+        if (idx < 0) {
+            return null;
+        }
+        String rest = destination.substring(idx + ROOM_PATH_MARKER.length());
+        int slash = rest.indexOf('/');
+        String roomId = slash < 0 ? rest : rest.substring(0, slash);
+        return roomId.isBlank() ? null : roomId;
     }
 
     private Map<String, Object> sessionAttributes(StompHeaderAccessor accessor) {
