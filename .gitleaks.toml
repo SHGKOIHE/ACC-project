@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+# Known legacy leak, already public on origin/main since commit 36026d9 (2026-06-01).
+# The hardcoded fallback was removed in ab0813f; git history cannot un-publish it, so it's
+# allowlisted here rather than blocking CI. The key itself must be rotated in the Kakao
+# developer console — this file does not make that unnecessary.
+[allowlist]
+description = "Legacy Kakao JS key leak (mobile/src/screens/MapScreen.tsx, pre-ab0813f) — rotated separately, history left intact"
+regexes = [
+  '''9841405e090263146cdb4a323bd57f92''',
+  # Dummy fixture value ("testkeytestkeytestkeytestkey1234" base64-encoded), used only in
+  # backend/src/test/resources/application-test.yml and old pre-fix application-local.yml —
+  # not a real credential. Flagged as a false positive by gitleaks whenever a shallow
+  # checkout (fetch-depth: 1) makes it see the whole file as newly added content.
+  '''dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTEyMzQ=''',
+]

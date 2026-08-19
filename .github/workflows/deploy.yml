@@ -11,6 +11,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Gitleaks needs real parent commits to diff against. With the default shallow
+          # (depth 1) checkout, it has no parent to compare, so it treats every line of the
+          # single available commit as newly added and false-positives on long-standing
+          # content (e.g. dummy test fixtures) — see .gitleaks.toml for the allowlist this
+          # was already tripping.
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
