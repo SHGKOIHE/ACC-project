@@ -50,7 +50,10 @@ public class JwtVerifier {
 
         Map<String, Object> claims = readJson(parts[1]);
         Instant expiresAt = readExpiry(claims);
-        if (expiresAt != null && expiresAt.isBefore(Instant.now())) {
+        if (expiresAt == null) {
+            throw new IllegalArgumentException("JWT missing exp claim");
+        }
+        if (expiresAt.isBefore(Instant.now())) {
             throw new IllegalArgumentException("JWT expired");
         }
 
