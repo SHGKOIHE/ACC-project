@@ -31,7 +31,7 @@ auth:
 ai:
   lambda:
     function-name: ${AI_LAMBDA_FUNCTION_NAME:food-recommend-api}
-    internal-key: ${AI_LAMBDA_INTERNAL_KEY:dev-secret}
+    internal-key: ${AI_LAMBDA_INTERNAL_KEY:}
 
 aws:
   region: ${AWS_REGION:ap-northeast-2}

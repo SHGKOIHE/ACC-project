@@ -2,8 +2,7 @@ package com.foodgroup.chat.controller;
 
 import com.foodgroup.chat.auth.JwtChannelInterceptor;
 import com.foodgroup.chat.dto.ChatMessageRequest;
-import com.foodgroup.chat.dto.ChatMessageResponse;
-import com.foodgroup.chat.pubsub.RedisChatPublisher;
+import com.foodgroup.chat.service.ChatMessageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -12,14 +11,11 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
-import java.time.Instant;
-import java.util.UUID;
-
 @Controller
 @RequiredArgsConstructor
 public class ChatController {
 
-    private final RedisChatPublisher redisChatPublisher;
+    private final ChatMessageService chatMessageService;
 
     @MessageMapping("/room/{roomId}/chat")
     public void handleChat(
@@ -27,16 +23,7 @@ public class ChatController {
             @Valid @Payload ChatMessageRequest request,
             SimpMessageHeaderAccessor headerAccessor
     ) {
-        ChatMessageResponse message = new ChatMessageResponse(
-                UUID.randomUUID().toString(),
-                roomId,
-                resolveMemberId(headerAccessor),
-                null,
-                request.type(),
-                request.content(),
-                Instant.now()
-        );
-        redisChatPublisher.publish(message);
+        chatMessageService.saveAndPublish(roomId, resolveMemberId(headerAccessor), request.type(), request.content());
     }
 
     private String resolveMemberId(SimpMessageHeaderAccessor headerAccessor) {

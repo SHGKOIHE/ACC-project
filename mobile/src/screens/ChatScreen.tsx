@@ -57,7 +57,6 @@ export function ChatScreen() {
         brokerURL,
         roomId,
         hasToken: Boolean(token),
-        tokenLength: token?.length ?? 0,
       });
       const client = new Client({
         brokerURL,
@@ -67,7 +66,8 @@ export function ChatScreen() {
         connectionTimeout: 5000,
         heartbeatIncoming: 0,
         heartbeatOutgoing: 0,
-        debug: (message) => console.warn('[ChatScreen] STOMP debug', message),
+        // No `debug` callback: stompjs passes it the raw CONNECT frame (including the
+        // X-Device-Token header) and every sent/received frame body verbatim.
         onConnect: () => {
           if (!mounted) return;
           console.warn('[ChatScreen] STOMP connected', { roomId });

@@ -30,6 +30,11 @@ public class LightsailIpHandshakeInterceptor implements HandshakeInterceptor {
         this.deviceTokenKeyPrefix = deviceTokenKeyPrefix == null ? "" : deviceTokenKeyPrefix;
     }
 
+    // Standard WebSocket clients (browsers, React Native's WebSocket) cannot set custom HTTP
+    // headers on the handshake request, so X-Device-Token is normally absent here — real
+    // authentication happens at STOMP CONNECT via JwtChannelInterceptor, which reads the token
+    // from the CONNECT frame instead. This interceptor only opportunistically pre-authenticates
+    // clients that CAN send the header, and never blocks ones that can't.
     @Override
     public boolean beforeHandshake(
             ServerHttpRequest request,
@@ -40,20 +45,15 @@ public class LightsailIpHandshakeInterceptor implements HandshakeInterceptor {
         String sourceIp = resolveSourceIp(request);
 
         String deviceToken = request.getHeaders().getFirst(DEVICE_TOKEN_HEADER);
-        if (deviceToken == null || deviceToken.isBlank()) {
-            log.warn("Rejected WebSocket handshake from {}: missing device token", sourceIp);
-            return false;
+        if (deviceToken != null && !deviceToken.isBlank()) {
+            String memberId = resolveMemberId(deviceToken.trim());
+            if (memberId != null && !memberId.isBlank()) {
+                attributes.put(JwtChannelInterceptor.SESSION_MEMBER_ID, memberId);
+                attributes.put(SESSION_DEVICE_TOKEN, deviceToken.trim());
+            }
         }
 
-        String memberId = resolveMemberId(deviceToken.trim());
-        if (memberId == null || memberId.isBlank()) {
-            log.warn("Rejected WebSocket handshake from {}: invalid device token", sourceIp);
-            return false;
-        }
-
-        log.info("WebSocket handshake accepted from {} memberId={}", sourceIp, memberId);
-        attributes.put(JwtChannelInterceptor.SESSION_MEMBER_ID, memberId);
-        attributes.put(SESSION_DEVICE_TOKEN, deviceToken.trim());
+        log.info("WebSocket handshake accepted from {}", sourceIp);
         return true;
     }
 

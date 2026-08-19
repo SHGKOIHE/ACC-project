@@ -1,5 +1,13 @@
+# No committed defaults here: a deploy that (mis)lands on this profile via a forgotten
+# SPRING_PROFILES_ACTIVE must still supply its own secrets via env, not silently reuse
+# a value from git. For local dev, set ENCRYPTION_KEY / AI_LAMBDA_INTERNAL_KEY in your shell
+# or .env (see infrastructure/.env.example) before running.
 encryption:
-  key: dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTEyMzQ=
+  key: ${ENCRYPTION_KEY}
+
+ai:
+  lambda:
+    internal-key: ${AI_LAMBDA_INTERNAL_KEY:}
 
 aws:
   dynamodb:

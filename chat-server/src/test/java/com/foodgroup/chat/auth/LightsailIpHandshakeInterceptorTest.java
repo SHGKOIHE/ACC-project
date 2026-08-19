@@ -7,7 +7,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.web.socket.WebSocketHandler;
 
-import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,15 +19,10 @@ import static org.mockito.Mockito.when;
 class LightsailIpHandshakeInterceptorTest {
 
     @Test
-    void allowsNewLightsailPrivateIpWhenDeviceTokenExistsInRedis() {
+    void preAuthenticatesWhenDeviceTokenHeaderPresentAndValid() {
         RedisMocks redis = redisReturning("member-1");
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
-        );
-        ServerHttpRequest request = requestWithHeaders(Map.of(
-                "X-Forwarded-For", "100.64.11.88, 10.0.0.1",
-                "X-Device-Token", "device-1"
-        ));
+        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(redis.template(), "device-token:");
+        ServerHttpRequest request = requestWithHeaders(Map.of("X-Device-Token", "device-1"));
         Map<String, Object> attributes = new HashMap<>();
 
         boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), attributes);
@@ -39,65 +33,35 @@ class LightsailIpHandshakeInterceptorTest {
         verify(redis.values()).get("device-token:device-1");
     }
 
+    // Standard WebSocket clients (browsers, React Native's WebSocket) cannot set custom HTTP
+    // headers on the handshake request, so this is the common case: no header at all. The
+    // handshake must still be allowed — real auth happens at STOMP CONNECT.
     @Test
-    void allowsAllowedIpWhenDeviceTokenIsMissingSoStompConnectCanAuthenticate() {
+    void allowsHandshakeWhenDeviceTokenHeaderIsMissing() {
         RedisMocks redis = redisReturning("member-1");
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
-        );
-        ServerHttpRequest request = requestWithHeaders(Map.of("X-Forwarded-For", "100.64.11.88"));
+        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(redis.template(), "device-token:");
+        ServerHttpRequest request = requestWithHeaders(Map.of());
+        Map<String, Object> attributes = new HashMap<>();
 
-        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
+        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), attributes);
 
         assertThat(allowed).isTrue();
+        assertThat(attributes).isEmpty();
         verifyNoInteractions(redis.values());
     }
 
     @Test
-    void rejectsAllowedIpWhenDeviceTokenDoesNotExistInRedis() {
+    void allowsHandshakeButSkipsPreAuthWhenDeviceTokenNotFoundInRedis() {
         RedisMocks redis = redisReturning(null);
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
-        );
-        ServerHttpRequest request = requestWithHeaders(Map.of(
-                "X-Real-IP", "43.201.33.167",
-                "X-Device-Token", "unknown-device"
-        ));
+        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(redis.template(), "device-token:");
+        ServerHttpRequest request = requestWithHeaders(Map.of("X-Device-Token", "unknown-device"));
+        Map<String, Object> attributes = new HashMap<>();
 
-        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
-
-        assertThat(allowed).isFalse();
-        verify(redis.values()).get("device-token:unknown-device");
-    }
-
-    @Test
-    void rejectsUnknownIpBeforeCheckingRedis() {
-        RedisMocks redis = redisReturning("member-1");
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167,100.64.11.88", "device-token:"
-        );
-        ServerHttpRequest request = requestWithRemoteAddress("203.0.113.10");
-
-        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
-
-        assertThat(allowed).isFalse();
-        verifyNoInteractions(redis.values());
-    }
-
-    @Test
-    void alwaysAllowsNewLightsailPrivateIpEvenWhenLegacySingleIpPropertyIsConfigured() {
-        RedisMocks redis = redisReturning("member-1");
-        LightsailIpHandshakeInterceptor interceptor = new LightsailIpHandshakeInterceptor(
-                redis.template(), "43.201.33.167", "device-token:"
-        );
-        ServerHttpRequest request = requestWithHeaders(Map.of(
-                "X-Forwarded-For", "100.64.11.88",
-                "X-Device-Token", "device-1"
-        ));
-
-        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), new HashMap<>());
+        boolean allowed = interceptor.beforeHandshake(request, null, mock(WebSocketHandler.class), attributes);
 
         assertThat(allowed).isTrue();
+        assertThat(attributes).isEmpty();
+        verify(redis.values()).get("device-token:unknown-device");
     }
 
     private ServerHttpRequest requestWithHeaders(Map<String, String> values) {
@@ -105,13 +69,6 @@ class LightsailIpHandshakeInterceptorTest {
         HttpHeaders headers = new HttpHeaders();
         values.forEach(headers::add);
         when(request.getHeaders()).thenReturn(headers);
-        return request;
-    }
-
-    private ServerHttpRequest requestWithRemoteAddress(String host) {
-        ServerHttpRequest request = mock(ServerHttpRequest.class);
-        when(request.getHeaders()).thenReturn(new HttpHeaders());
-        when(request.getRemoteAddress()).thenReturn(new InetSocketAddress(host, 12345));
         return request;
     }
 

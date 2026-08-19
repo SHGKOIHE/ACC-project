@@ -21,10 +21,13 @@ export FUNCTION_NAME=food-recommend-api
 export REGION=ap-northeast-2
 export DEPLOY_BUCKET=food-app-assets-sj
 export INTERNAL_SECRET_KEY=<백엔드 AI_LAMBDA_INTERNAL_KEY와 동일한 값>
+export KAKAO_REST_API_KEY=<Kakao Developers REST API 키> # 선택. 미설정 시 카테고리명 기반 폴백 유지
 ```
 
 > **AI 엔진**: Bedrock (`anthropic.claude-3-haiku-20240307-v1:0`, 리전 `ap-northeast-2`)이 추천 결과 JSON과 설명을 직접 생성합니다. Bedrock 호출 실패 시 Lambda는 기존 규칙 엔진 결과로 폴백합니다.
 > API 키 불필요 — Lambda 실행 Role의 IAM 권한으로 접근.
+
+> **실제 식당 후보 (카카오맵 로컬 API)**: `KAKAO_REST_API_KEY` 설정 시, 경희대학교 국제캠퍼스 인근 실제 식당을 카테고리별로 조회해 Bedrock 프롬프트와 규칙 엔진 폴백에 모두 반영합니다(허구 상호명 방지). 키 미설정 시 이 단계는 건너뛰고 기존처럼 카테고리명만 반환합니다. 앱이 이미 지도 표시용 Kakao 지도 SDK(JS 키)를 사용 중이므로, 같은 Kakao Developers 애플리케이션에서 **REST API 키**를 추가로 발급받아 사용하면 됩니다.
 
 ---
 
@@ -63,7 +66,7 @@ aws lambda create-function \
 ```bash
 aws lambda update-function-configuration \
   --function-name ${FUNCTION_NAME} \
-  --environment "Variables={INTERNAL_SECRET_KEY=${INTERNAL_SECRET_KEY}}" \
+  --environment "Variables={INTERNAL_SECRET_KEY=${INTERNAL_SECRET_KEY},KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}}" \
   --region ${REGION}
 ```
 

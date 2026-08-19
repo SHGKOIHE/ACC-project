@@ -1,5 +1,6 @@
 package com.foodgroup.chat.auth;
 
+import com.foodgroup.chat.repository.RoomParticipantChecker;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.Message;
@@ -18,19 +19,24 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     public static final String SESSION_MEMBER_ID = "memberId";
     private static final String DEVICE_TOKEN_HEADER = "X-Device-Token";
+    private static final String ROOM_TOPIC_PREFIX = "/topic/room/";
+    private static final String BROKER_PREFIX = "/topic/";
 
     private final JwtVerifier jwtVerifier;
     private final StringRedisTemplate redisTemplate;
     private final String deviceTokenKeyPrefix;
+    private final RoomParticipantChecker roomParticipantChecker;
 
     public JwtChannelInterceptor(
             JwtVerifier jwtVerifier,
             StringRedisTemplate redisTemplate,
-            @Value("${chat.auth.device-token-key-prefix:${CHAT_DEVICE_TOKEN_KEY_PREFIX:device-token:}}") String deviceTokenKeyPrefix
+            @Value("${chat.auth.device-token-key-prefix:${CHAT_DEVICE_TOKEN_KEY_PREFIX:device-token:}}") String deviceTokenKeyPrefix,
+            RoomParticipantChecker roomParticipantChecker
     ) {
         this.jwtVerifier = jwtVerifier;
         this.redisTemplate = redisTemplate;
         this.deviceTokenKeyPrefix = deviceTokenKeyPrefix == null ? "" : deviceTokenKeyPrefix;
+        this.roomParticipantChecker = roomParticipantChecker;
     }
 
     @Override
@@ -70,9 +76,45 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
             if (accessor.getSessionAttributes() == null || accessor.getSessionAttributes().get(SESSION_MEMBER_ID) == null) {
                 throw new IllegalArgumentException("Not authenticated");
             }
+
+            String destination = accessor.getDestination();
+
+            if (StompCommand.SEND.equals(accessor.getCommand())) {
+                // Clients must never publish directly to a broker-routed destination — chat
+                // messages only ever flow through the /app-prefixed ChatController, which
+                // enforces room membership before persisting/broadcasting. Allowing a bare
+                // SEND here would let any authenticated client push a forged, unchecked
+                // payload straight to a room's subscribers.
+                if (destination != null && destination.startsWith(BROKER_PREFIX)) {
+                    throw new IllegalArgumentException("Cannot publish directly to broker destination");
+                }
+            }
+
+            if (StompCommand.SUBSCRIBE.equals(accessor.getCommand()) && destination != null && destination.startsWith(BROKER_PREFIX)) {
+                // Deny by default: only an exact "/topic/room/{roomId}" is a valid subscription.
+                // Spring's SimpleBroker matches subscriptions with AntPathMatcher, so a bare
+                // startsWith(ROOM_TOPIC_PREFIX) check would let "/topic/**" (or "/topic/room/*")
+                // register unchecked while still matching every room broadcast.
+                String memberId = String.valueOf(accessor.getSessionAttributes().get(SESSION_MEMBER_ID));
+                String roomId = validRoomId(destination);
+                if (roomId == null || !roomParticipantChecker.isParticipant(roomId, memberId)) {
+                    throw new IllegalArgumentException("Not a room participant");
+                }
+            }
         }
 
         return message;
+    }
+
+    private static String validRoomId(String destination) {
+        if (!destination.startsWith(ROOM_TOPIC_PREFIX)) {
+            return null;
+        }
+        String roomId = destination.substring(ROOM_TOPIC_PREFIX.length());
+        if (roomId.isBlank() || roomId.indexOf('/') >= 0 || roomId.indexOf('*') >= 0 || roomId.indexOf('#') >= 0) {
+            return null;
+        }
+        return roomId;
     }
 
     private Map<String, Object> sessionAttributes(StompHeaderAccessor accessor) {

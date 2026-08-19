@@ -8,8 +8,9 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 
-const KAKAO_JS_KEY =
-  process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "9841405e090263146cdb4a323bd57f92";
+// No hardcoded fallback: the previous default was a real key committed to source (and git
+// history). Set EXPO_PUBLIC_KAKAO_JS_KEY via env/EAS secrets instead.
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
 
 const DEFAULT_MAP_COORDS = {
   lat: Number(process.env.EXPO_PUBLIC_DEFAULT_MAP_LAT ?? 37.24240),

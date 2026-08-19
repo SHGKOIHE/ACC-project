@@ -23,7 +23,7 @@ public class JwtVerifier {
 
     public JwtVerifier(
             ObjectMapper objectMapper,
-            @Value("${chat.auth.jwt-secret:${JWT_SECRET:dev-secret}}") String jwtSecret
+            @Value("${chat.auth.jwt-secret:${JWT_SECRET:}}") String jwtSecret
     ) {
         this.objectMapper = objectMapper;
         this.secret = decodeSecret(jwtSecret);

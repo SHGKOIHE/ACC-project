@@ -48,3 +48,13 @@ test('프롬프트는 국제캠퍼스 음식 추천 범위와 사실성 제약�
   expect(prompt).not.toContain('37.2424');
   expect(prompt).not.toContain('maxDeliveryFee');
 });
+
+test('카카오맵 후보가 있으면 후보 목록만 사용하도록 지시하고 카테고리 규칙은 쓰지 않는다', () => {
+  const candidates = { 치킨: [{ name: '경희치킨', address: '용인시', distanceMeters: 300, placeUrl: 'https://x' }] };
+  const prompt = buildPrompt([], { category: '치킨' }, candidates);
+
+  expect(prompt).toContain('실제 후보 식당 목록');
+  expect(prompt).toContain('경희치킨');
+  expect(prompt).toContain('목록에 없는 상호명을 만들어내지 않는다');
+  expect(prompt).not.toContain('"치킨", "피자", "떡볶이"처럼');
+});

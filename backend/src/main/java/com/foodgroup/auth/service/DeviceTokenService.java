@@ -37,8 +37,13 @@ public class DeviceTokenService {
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(redisTemplate.opsForValue().get(redisKey(token.trim())))
-                .filter(memberId -> !memberId.isBlank());
+        String key = redisKey(token.trim());
+        Optional<String> memberId = Optional.ofNullable(redisTemplate.opsForValue().get(key))
+                .filter(id -> !id.isBlank());
+        // Sliding expiration: an active user's session never hits the hard TTL; an inactive
+        // one (no request for ttlHours) still expires naturally.
+        memberId.ifPresent(id -> redisTemplate.expire(key, Duration.ofHours(ttlHours)));
+        return memberId;
     }
 
     private String redisKey(String token) {

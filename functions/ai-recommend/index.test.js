@@ -4,15 +4,21 @@ const { handler } = require('./index');
 const { calculateScore, recommend, detectCategory } = require('./rule_engine');
 
 const { generateRecommendations } = require('./bedrock_client');
+const { fetchCandidatesByCategory } = require('./kakao_client');
 
 jest.mock('./bedrock_client', () => ({
   generateRecommendations: jest.fn(),
+}));
+
+jest.mock('./kakao_client', () => ({
+  fetchCandidatesByCategory: jest.fn(),
 }));
 
 const VALID_KEY = 'test-secret';
 
 beforeEach(() => {
   process.env.INTERNAL_SECRET_KEY = VALID_KEY;
+  fetchCandidatesByCategory.mockResolvedValue({});
   generateRecommendations.mockResolvedValue({
     recommendations: [
       { rank: 1, restaurantName: '치킨', score: 92, reason: '치킨 선호가 높습니다.' },
@@ -78,8 +84,47 @@ test('정상 요청 시 recommendations 배열 포함 응답', async () => {
   expect(parsed.explanation).toBe('AI가 주문 선호를 기준으로 추천했습니다.');
   expect(generateRecommendations).toHaveBeenCalledWith(
     expect.any(Array),
+    {},
     {}
   );
+});
+
+test('카카오맵 후보를 조회해 Bedrock 호출에 그대로 전달한다', async () => {
+  const candidates = { 치킨: [{ name: '경희치킨', address: '용인시', distanceMeters: 300, placeUrl: 'https://x' }] };
+  fetchCandidatesByCategory.mockResolvedValueOnce(candidates);
+
+  const event = makeEvent({
+    roomId: 1,
+    participants: [{ nickname: '짱구', orderItems: [{ name: '치킨', price: 15000 }] }],
+    filters: {},
+  });
+
+  await handler(event);
+
+  expect(fetchCandidatesByCategory).toHaveBeenCalledWith(expect.any(Array));
+  expect(generateRecommendations).toHaveBeenCalledWith(
+    expect.any(Array),
+    {},
+    candidates
+  );
+});
+
+test('Bedrock 실패 시 카카오맵 후보가 규칙 엔진 폴백에도 전달된다', async () => {
+  const candidates = { 치킨: [{ name: '경희치킨', address: '용인시', distanceMeters: 300, placeUrl: 'https://x' }] };
+  fetchCandidatesByCategory.mockResolvedValueOnce(candidates);
+  generateRecommendations.mockRejectedValueOnce(new Error('bedrock down'));
+
+  const event = makeEvent({
+    roomId: 1,
+    participants: [{ nickname: '짱구', orderItems: [{ name: '치킨', price: 15000 }] }],
+    filters: { category: '치킨' },
+  });
+
+  const result = await handler(event);
+  const parsed = JSON.parse(result.body);
+
+  expect(parsed.fallback).toBe(true);
+  expect(parsed.recommendations[0]).toMatchObject({ restaurantName: '경희치킨' });
 });
 
 test('Bedrock 추천 실패 시 규칙 엔진 결과로 폴백', async () => {

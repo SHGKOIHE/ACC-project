@@ -29,15 +29,14 @@ public class AiRecommendClient {
     public AiRecommendClient(
             @Value("${ai.lambda.function-name:food-recommend-api}") String functionName,
             @Value("${ai.lambda.internal-key:}") String internalKey) {
-        this.lambdaClient = LambdaClient.builder()
-                .region(Region.AP_NORTHEAST_2)
-                .build();
-        this.functionName = functionName;
-        this.internalKey = internalKey;
+        this(LambdaClient.builder().region(Region.AP_NORTHEAST_2).build(), functionName, internalKey);
     }
 
     // package-private for testing
     AiRecommendClient(LambdaClient lambdaClient, String functionName, String internalKey) {
+        if (internalKey == null || internalKey.isBlank()) {
+            throw new IllegalStateException("ai.lambda.internal-key (AI_LAMBDA_INTERNAL_KEY) must be set");
+        }
         this.lambdaClient = lambdaClient;
         this.functionName = functionName;
         this.internalKey = internalKey;

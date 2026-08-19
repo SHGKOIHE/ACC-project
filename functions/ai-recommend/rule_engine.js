@@ -71,7 +71,7 @@ function buildReason(category, participants, filters) {
     : '특정 선호가 없을 때 선택하기 좋은 음식 카테고리입니다.';
 }
 
-function recommend(participants = [], filters = {}) {
+function recommend(participants = [], filters = {}, restaurantsByCategory = {}) {
   const candidates = CATEGORIES.map(category => ({
     category,
     score: calculateScore({ category }, participants, filters),
@@ -79,13 +79,16 @@ function recommend(participants = [], filters = {}) {
 
   candidates.sort((a, b) => b.score - a.score);
 
-  return candidates.slice(0, 3).map((item, index) => ({
-    rank: index + 1,
-    // Kept for API compatibility; the value is a food/menu category, not a real restaurant.
-    restaurantName: item.category,
-    score: item.score,
-    reason: buildReason(item.category, participants, filters),
-  }));
+  return candidates.slice(0, 3).map((item, index) => {
+    const match = (restaurantsByCategory[item.category] || [])[0];
+    return {
+      rank: index + 1,
+      // 카카오맵 후보가 있으면 실제 상호명, 없으면 기존처럼 음식 카테고리명(API 호환 유지).
+      restaurantName: match ? match.name : item.category,
+      score: item.score,
+      reason: buildReason(item.category, participants, filters),
+    };
+  });
 }
 
-module.exports = { calculateScore, recommend, detectCategory };
+module.exports = { calculateScore, recommend, detectCategory, CATEGORIES };

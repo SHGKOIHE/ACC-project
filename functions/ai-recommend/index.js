@@ -1,7 +1,8 @@
 'use strict';
 
-const { recommend } = require('./rule_engine');
+const { recommend, CATEGORIES } = require('./rule_engine');
 const { generateRecommendations } = require('./bedrock_client');
+const { fetchCandidatesByCategory } = require('./kakao_client');
 
 const INTERNAL_KEY_HEADER = 'x-internal-key';
 
@@ -38,9 +39,10 @@ exports.handler = async (event) => {
   }
 
   const { participants = [], filters = {} } = body;
+  const restaurantsByCategory = await fetchCandidatesByCategory(CATEGORIES);
 
   try {
-    const aiResult = await generateRecommendations(participants, filters);
+    const aiResult = await generateRecommendations(participants, filters, restaurantsByCategory);
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -48,7 +50,7 @@ exports.handler = async (event) => {
     };
   } catch (e) {
     console.warn('Bedrock recommendation failed, falling back to rule engine:', e.message);
-    const recommendations = recommend(participants, filters);
+    const recommendations = recommend(participants, filters, restaurantsByCategory);
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
