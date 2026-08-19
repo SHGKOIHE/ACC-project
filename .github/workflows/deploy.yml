@@ -34,7 +34,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Lambda JAR
-        run: cd backend && ./gradlew bootJar --no-daemon
+        # lambdaJar, not bootJar — bootJar nests classes under BOOT-INF/, which AWS Lambda's
+        # classloader can't see, so every invocation fails with ClassNotFoundException.
+        run: cd backend && ./gradlew lambdaJar --no-daemon
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -45,7 +47,7 @@ jobs:
 
       - name: Upload JAR to S3
         run: |
-          JAR=$(ls backend/build/libs/*.jar | head -1)
+          JAR=$(ls backend/build/libs/*-lambda.jar | head -1)
           aws s3 cp "$JAR" s3://food-app-assets-sj/lambda/foodgroup-backend.jar
 
       - name: Update Lambda Function Code
