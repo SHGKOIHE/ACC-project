@@ -29,6 +29,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Self-registered single-instance setup: this app is both the Admin Server (dashboard UI)
+    // and its only monitored client — no separate service to deploy/maintain.
+    implementation 'de.codecentric:spring-boot-admin-starter-server:3.3.6'
+    implementation 'de.codecentric:spring-boot-admin-starter-client:3.3.6'
 
     implementation platform('software.amazon.awssdk:bom:2.25.60')
     implementation 'software.amazon.awssdk:dynamodb-enhanced'

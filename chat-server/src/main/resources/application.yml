@@ -9,6 +9,32 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+  # No committed default: an unset ADMIN_PASSWORD must fail startup, not silently expose
+  # the actuator/admin dashboard behind a guessable or absent credential.
+  security:
+    user:
+      name: ${ADMIN_USER:admin}
+      password: ${ADMIN_PASSWORD}
+  boot:
+    admin:
+      client:
+        url: http://localhost:${server.port}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD}
+        instance:
+          service-url: http://localhost:${server.port}
+          metadata:
+            user.name: ${ADMIN_USER:admin}
+            user.password: ${ADMIN_PASSWORD}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,threaddump,env
+  endpoint:
+    health:
+      show-details: when-authorized
 
 aws:
   region: ${AWS_REGION:ap-northeast-2}
